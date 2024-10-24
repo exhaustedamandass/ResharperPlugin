@@ -1,5 +1,4 @@
 using System;
-using System.ComponentModel;
 using JetBrains.Application.Settings.WellKnownRootKeys;
 using JetBrains.Application.UI.Options;
 using JetBrains.Application.UI.Options.OptionPages;
@@ -30,6 +29,6 @@ public class OptionsPage : BeSimpleOptionsPage
 [JetBrains.Application.Settings.SettingsKey(typeof(EnvironmentSettings), "My settings")]
 public class MySettingsKey
 {
-    [JetBrains.Application.Settings.SettingsEntry(false, "Check Me")]
+    [JetBrains.Application.Settings.SettingsEntry(false, "Number of commits")]
     public int NCommits;
 }
