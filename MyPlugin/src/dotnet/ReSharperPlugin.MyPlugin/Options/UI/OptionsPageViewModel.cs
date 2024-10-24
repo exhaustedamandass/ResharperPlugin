@@ -8,7 +8,7 @@ namespace ReSharperPlugin.MyPlugin.Options.UI;
 
 public class OptionsPageViewModel : AAutomation
 {
-    public IProperty<int> Number { get; set; }
+    private IProperty<int> Number { get; set; }
 
     [Obsolete("Obsolete")]
     public OptionsPageViewModel(Lifetime lifetime, ISettingsStore settingsStore)
