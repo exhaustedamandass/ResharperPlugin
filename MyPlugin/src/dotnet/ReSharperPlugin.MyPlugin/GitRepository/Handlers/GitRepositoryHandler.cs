@@ -6,6 +6,7 @@ using JetBrains.Application.DataContext;
 using JetBrains.Application.Settings;
 using LibGit2Sharp;
 using Microsoft.VisualStudio.TestPlatform.Utilities.Helpers;
+using ReSharperPlugin.MyPlugin.ElementProblemAnalyzers;
 using ReSharperPlugin.MyPlugin.GitRepository.Helpers;
 using ReSharperPlugin.MyPlugin.GitRepository.Monitors;
 using ReSharperPlugin.MyPlugin.Options;
@@ -16,12 +17,13 @@ public class GitRepositoryHandler
 {
     private string _repositoryPath;
     private GitRepositoryMonitor _gitMonitor;
-    private ISettingsStore _settingsStore;
+    private CommitModificationAnalyzer _analyzer;
     private int _nCommits;
 
-    public GitRepositoryHandler(ISettingsStore settingsStore, string solutionPath, IDataContext dataContext)
+    public GitRepositoryHandler(ISettingsStore settingsStore, string solutionPath, IDataContext dataContext,
+        CommitModificationAnalyzer analyzer)
     {
-        _settingsStore = settingsStore;
+        _analyzer = analyzer;
         _repositoryPath = GetRepositoryRoot(solutionPath);
 
         if (_repositoryPath == null)
@@ -32,7 +34,7 @@ public class GitRepositoryHandler
         
         _gitMonitor = new GitRepositoryMonitor(_repositoryPath, OnGitRepositoryChanged);
         
-        var gitPluginSettings = _settingsStore.BindToContextTransient(ContextRange.Smart((lt, _) => dataContext));
+        var gitPluginSettings = settingsStore.BindToContextTransient(ContextRange.Smart((lt, _) => dataContext));
         var settings = gitPluginSettings.GetKey<MySettingsKey>(SettingsOptimization.DoMeSlowly);
         _nCommits = settings.NCommits; 
     }
@@ -47,6 +49,7 @@ public class GitRepositoryHandler
     //TODO: implement
     private void InvalidateDaemon()
     {
+        
         Console.WriteLine("Invalidating the daemon...");
         // Logic to invalidate the daemon or cache goes here
     }
