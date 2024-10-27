@@ -23,12 +23,16 @@ public class OptionsPage : BeSimpleOptionsPage
     {
         IProperty<int> nCommits = new Property<int>(lifetime, "ReSharperGitPluginOptions::nCommits");
         nCommits.SetValue(optionsSettingsSmartContext.StoreOptionsTransactionContext.GetValue( (MySettingsKey key) => key.NCommits));
+
+        AddIntOption((MySettingsKey key) => key.NCommits, "Number of commits");
     }
+    
+    
 }
 
 [JetBrains.Application.Settings.SettingsKey(typeof(EnvironmentSettings), "My settings")]
 public class MySettingsKey
 {
-    [JetBrains.Application.Settings.SettingsEntry(false, "Number of commits")]
+    [JetBrains.Application.Settings.SettingsEntry(5, "Number of commits")]
     public int NCommits;
 }
