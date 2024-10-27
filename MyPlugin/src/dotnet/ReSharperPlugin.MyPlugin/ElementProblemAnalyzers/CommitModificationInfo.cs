@@ -6,9 +6,10 @@ using JetBrains.ReSharper.Feature.Services.Daemon;
 namespace ReSharperPlugin.MyPlugin.ElementProblemAnalyzers;
 
 //TODO: fix this
-[StaticSeverityHighlighting(Severity.INFO, HighlightingGroupIds.CodeInfo)]
-public class ClassModificationInfo : IHighlighting
+[StaticSeverityHighlighting(Severity.INFO, typeof(HighlightingGroupIds.GutterMarks))]
+public class CommitModificationInfo : IHighlighting
 {
+    
     public bool IsValid()
     {
         throw new System.NotImplementedException();

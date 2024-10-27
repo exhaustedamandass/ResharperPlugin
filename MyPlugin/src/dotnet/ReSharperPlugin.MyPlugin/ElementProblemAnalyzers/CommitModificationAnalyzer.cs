@@ -6,9 +6,16 @@ using JetBrains.Util;
 
 namespace ReSharperPlugin.MyPlugin.ElementProblemAnalyzers;
 
-[ElementProblemAnalyzer(typeof(IFile), HighlightingTypes = new []{typeof(ClassModificationInfo)})]
+[ElementProblemAnalyzer(typeof(IFile), HighlightingTypes = new []{typeof(CommitModificationInfo)})]
 public class CommitModificationAnalyzer : ElementProblemAnalyzer<IFile>
 {
+    private readonly IDaemon _daemon;
+
+    public CommitModificationAnalyzer(IDaemon daemon)
+    {
+        _daemon = daemon;
+    }
+
     protected override void Run(IFile element, ElementProblemAnalyzerData data, IHighlightingConsumer consumer)
     {
     // Get the document corresponding to the IFile element
@@ -28,9 +35,18 @@ public class CommitModificationAnalyzer : ElementProblemAnalyzer<IFile>
             var range = new DocumentRange(document, new TextRange(i, i + 1));
 
             // Create an instance of your bespoke highlighting class and add it to the consumer
-            consumer.AddHighlighting(new ClassModificationInfo(), range);
+            consumer.AddHighlighting(new CommitModificationInfo(), range);
 
             nonWhitespaceCount++;
+        }
+    }
+    
+    public void TriggerDaemonInvalidation(IFile file)
+    {
+        var document = file.GetSourceFile()?.Document;
+        if (document != null)
+        {
+            _daemon.Invalidate("Triggering reanalysis for modified characters", document);
         }
     }
 }
