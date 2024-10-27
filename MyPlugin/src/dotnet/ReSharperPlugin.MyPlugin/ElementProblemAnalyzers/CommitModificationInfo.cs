@@ -1,27 +1,26 @@
-using System;
 using JetBrains.DocumentModel;
-using JetBrains.ReSharper.Daemon.Specific.Errors.Internal;
 using JetBrains.ReSharper.Feature.Services.Daemon;
 
 namespace ReSharperPlugin.MyPlugin.ElementProblemAnalyzers;
 
-//TODO: fix this
 [StaticSeverityHighlighting(Severity.INFO, typeof(HighlightingGroupIds.GutterMarks))]
 public class CommitModificationInfo : IHighlighting
 {
-    
-    public bool IsValid()
+    private readonly DocumentRange _range;
+    private readonly string _commitMessage;
+
+    public CommitModificationInfo(DocumentRange range, string commitMessage)
     {
-        throw new System.NotImplementedException();
+        _range = range;
+        _commitMessage = commitMessage;
+        ErrorStripeToolTip = $"Commit: {_commitMessage}";
     }
 
-    public DocumentRange CalculateRange()
-    {
-        throw new System.NotImplementedException();
-    }
+    public bool IsValid() => _range.IsValid();
 
-    //TODO: should return the corresponding commit message.
-    public string ToolTip => throw new NotImplementedException();
-    
+    public DocumentRange CalculateRange() => _range;
+
+    public string ToolTip => $"Commit message: {_commitMessage}";
+
     public string ErrorStripeToolTip { get; }
 }
