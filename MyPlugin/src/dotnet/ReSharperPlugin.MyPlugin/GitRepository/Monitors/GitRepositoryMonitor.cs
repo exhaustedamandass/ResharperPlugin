@@ -6,51 +6,44 @@ namespace ReSharperPlugin.MyPlugin.GitRepository.Monitors;
 
 public class GitRepositoryMonitor
 {
-    private FileSystemWatcher _gitWatcher;
-    private readonly string _repositoryPath;
+    private readonly FileSystemWatcher _gitWatcher;
     private readonly Action _onRepositoryChanged;
 
     public GitRepositoryMonitor(string repositoryPath, Action onRepositoryChanged)
     {
-        _repositoryPath = repositoryPath;
         _onRepositoryChanged = onRepositoryChanged;
-        
-        InitializeGitWatcher();
-    }
-    
-    private void InitializeGitWatcher()
-    {
-        _gitWatcher = new FileSystemWatcher();
-        _gitWatcher.Path = Path.Combine(_repositoryPath, ".git");
-        _gitWatcher.IncludeSubdirectories = true;
 
-        // Monitor for changes that could indicate new commits, branch switches, etc.
-        _gitWatcher.NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.DirectoryName;
-
-        _gitWatcher.Changed += OnGitRepositoryChanged;
-        _gitWatcher.Created += OnGitRepositoryChanged;
-        _gitWatcher.Deleted += OnGitRepositoryChanged;
-        _gitWatcher.Renamed += OnGitRepositoryChanged;
-
-        _gitWatcher.EnableRaisingEvents = true;
-
-        Console.WriteLine("Started monitoring the Git repository for changes...");
-    }
-    
-    private void OnGitRepositoryChanged(object sender, FileSystemEventArgs e)
-    {
-        // Use debounce to avoid multiple triggers in quick succession
-        Task.Delay(500).ContinueWith(t =>
+        // Initialize FileSystemWatcher to monitor the .git directory
+        _gitWatcher = new FileSystemWatcher(Path.Combine(repositoryPath, ".git"))
         {
-            Console.WriteLine($"Detected changes in Git repository: {e.ChangeType} {e.Name}");
-            _onRepositoryChanged?.Invoke();
+            NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.DirectoryName,
+            IncludeSubdirectories = true,
+            EnableRaisingEvents = true
+        };
+
+        // Subscribe to FileSystemWatcher events
+        _gitWatcher.Changed += OnGitDirectoryChanged;
+        _gitWatcher.Created += OnGitDirectoryChanged;
+        _gitWatcher.Deleted += OnGitDirectoryChanged;
+        _gitWatcher.Renamed += OnGitDirectoryChanged;
+
+        Console.WriteLine("Started monitoring Git repository for changes...");
+    }
+
+    private void OnGitDirectoryChanged(object sender, FileSystemEventArgs e)
+    {
+        // Debounce multiple events triggered by a single Git operation
+        Task.Delay(500).ContinueWith(_ =>
+        {
+            Console.WriteLine($"Detected Git repository change: {e.ChangeType} in {e.FullPath}");
+            _onRepositoryChanged?.Invoke(); // Notify that the repository has changed
         });
     }
-    
+
     public void StopMonitoring()
     {
         _gitWatcher.EnableRaisingEvents = false;
         _gitWatcher.Dispose();
-        Console.WriteLine("Stopped monitoring the Git repository.");
+        Console.WriteLine("Stopped monitoring Git repository.");
     }
 }

@@ -2,127 +2,86 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using JetBrains.Application.DataContext;
-using JetBrains.Application.Settings;
+using JetBrains.ProjectModel;
 using LibGit2Sharp;
-using Microsoft.VisualStudio.TestPlatform.Utilities.Helpers;
-using ReSharperPlugin.MyPlugin.ElementProblemAnalyzers;
-using ReSharperPlugin.MyPlugin.GitRepository.Helpers;
 using ReSharperPlugin.MyPlugin.GitRepository.Monitors;
-using ReSharperPlugin.MyPlugin.Options;
 
 namespace ReSharperPlugin.MyPlugin.GitRepository.Handlers;
 
+[SolutionComponent]
 public class GitRepositoryHandler
 {
-    private string _repositoryPath;
     private GitRepositoryMonitor _gitMonitor;
-    private CommitModificationAnalyzer _analyzer;
-    private int _nCommits;
+    private readonly string _repositoryPath;
+    private Dictionary<string, string> _fileCommitMessages;
+    
+    public bool IsTrackingEnabled { get; private set; }
 
-    public GitRepositoryHandler(ISettingsStore settingsStore, string solutionPath, IDataContext dataContext,
-        CommitModificationAnalyzer analyzer)
+    public GitRepositoryHandler(string solutionPath)
     {
-        _analyzer = analyzer;
+        _fileCommitMessages = new Dictionary<string, string>();
+        
         _repositoryPath = GetRepositoryRoot(solutionPath);
+        
+        IsTrackingEnabled = !string.IsNullOrEmpty(solutionPath);
 
-        if (_repositoryPath == null)
+        if (IsTrackingEnabled)
         {
-            Console.WriteLine("The solution is not located in a Git repository.");
-            return;
+            Console.WriteLine("Solution is located within a Git repository.");
+            StartMonitoring();
         }
+        else
+        {
+            Console.WriteLine("Solution is not located in a Git repository.");
+        }
+    }
+
+    private void StartMonitoring()
+    {
+        if (!IsTrackingEnabled) return;
         
-        _gitMonitor = new GitRepositoryMonitor(_repositoryPath, OnGitRepositoryChanged);
-        
-        var gitPluginSettings = settingsStore.BindToContextTransient(ContextRange.Smart((lt, _) => dataContext));
-        var settings = gitPluginSettings.GetKey<MySettingsKey>(SettingsOptimization.DoMeSlowly);
-        _nCommits = settings.NCommits; 
+        _gitMonitor = new GitRepositoryMonitor(_repositoryPath, OnRepositoryChanged);
     }
     
-    private void OnGitRepositoryChanged()
+    private void OnRepositoryChanged()
     {
-        InvalidateDaemon();
-        ProcessRecentCommits();
+        // Refresh modified files and commit messages when repository changes
+        UpdateModifiedFilesAndMessages();
     }
 
-    // Invalidate daemon or cache
-    //TODO: implement
-    private void InvalidateDaemon()
+    private void UpdateModifiedFilesAndMessages()
     {
-        
-        Console.WriteLine("Invalidating the daemon...");
-        // Logic to invalidate the daemon or cache goes here
-    }
+        _fileCommitMessages.Clear();
 
-    // Re-read recent commits using LibGit2Sharp
-    private void ProcessRecentCommits()
-    {
         using (var repo = new Repository(_repositoryPath))
         {
-            var currentBranch = repo.Head;
-            Console.WriteLine($"Current branch: {currentBranch.FriendlyName}");
-
-            var commits = GetRecentCommits(repo);
-            foreach (var commit in commits)
+            var recentCommits = repo.Commits.Take(10);
+            foreach (var commit in recentCommits)
             {
-                ProcessCommitChanges(commit, repo);
+                foreach (var parent in commit.Parents)
+                {
+                    var changes = repo.Diff.Compare<TreeChanges>(parent.Tree, commit.Tree);
+                    foreach (var change in changes)
+                    {
+                        if (change.Status == ChangeKind.Modified && !_fileCommitMessages.ContainsKey(change.Path))
+                        {
+                            _fileCommitMessages[change.Path] = commit.MessageShort;
+                        }
+                    }
+                }
             }
         }
     }
 
-    // Get the recent commits from the repository
-    private List<Commit> GetRecentCommits(Repository repo)
+    public bool IsFileModified(string filePath) => _fileCommitMessages.ContainsKey(filePath);
+
+    public string GetCommitMessageForLine(string filePath, int lineNumber)
     {
-        return repo.Commits.Take(_nCommits).ToList();
+        return _fileCommitMessages.TryGetValue(filePath, out var commitMessage) ? commitMessage : string.Empty;
     }
 
-    // Process the changes of a single commit
-    private void ProcessCommitChanges(Commit commit, Repository repo)
-    {
-        Console.WriteLine($"Processing commit: {commit.Sha}");
-        Console.WriteLine($"Message: {commit.MessageShort}");
-
-        foreach (var parent in commit.Parents)
-        {
-            var changes = repo.Diff.Compare<TreeChanges>(parent.Tree, commit.Tree);
-            ProcessFileChanges(changes, commit.MessageShort);
-        }
-    }
-
-    // Process the modified files in a commit
-    private void ProcessFileChanges(TreeChanges changes, string commitMessage)
-    {
-        foreach (var change in changes)
-        {
-            if (change.Status == ChangeKind.Modified)
-            {
-                Console.WriteLine($"Modified file: {change.Path}");
-                HighlightFirstNonWhitespaceCharacters(change.Path, commitMessage);
-            }
-        }
-    }
-
-    // Highlight the first 5 non-whitespace characters (functionality not implemented)
-    private void HighlightFirstNonWhitespaceCharacters(string filePath, string commitMessage)
-    {
-        string fileContent = FileOperationsHelper.ReadFileContents(filePath);
-        if (fileContent == null)
-        {
-            return;
-        }
-
-        List<int> positions = FileOperationsHelper.FindFirstNonWhitespacePositions(fileContent, 5);
-
-        foreach (var position in positions)
-        {
-            // Placeholder for highlighting functionality
-            Console.WriteLine($"Highlighting character: {fileContent[position]} at position {position} for commit: {commitMessage}");
-        }
-
-        // Placeholder for actual highlighting logic
-    }
-
-    // Stop monitoring the repository
+    public void StopMonitoring() => _gitMonitor.StopMonitoring();
+    
     private string GetRepositoryRoot(string solutionPath)
     {
         var directoryInfo = new DirectoryInfo(solutionPath);
@@ -132,11 +91,5 @@ public class GitRepositoryHandler
         }
 
         return directoryInfo?.FullName;
-    }
-    
-    // Stop monitoring the repository
-    public void StopMonitoring()
-    {
-        _gitMonitor?.StopMonitoring();
     }
 }
