@@ -17,13 +17,21 @@ public class GitRepositoryHandler
     
     public bool IsTrackingEnabled { get; private set; }
 
-    public GitRepositoryHandler(string solutionPath)
+    public GitRepositoryHandler(ISolution solution)
     {
         _fileCommitMessages = new Dictionary<string, string>();
         
+        var solutionPath = solution.SolutionDirectory.FullPath;
+
+        if (string.IsNullOrEmpty(solutionPath))
+        {
+            Console.WriteLine("Solution path is null or empty, cannot initialize GitRepositoryHandler.");
+            IsTrackingEnabled = false;
+            return;
+        }
+
         _repositoryPath = GetRepositoryRoot(solutionPath);
-        
-        IsTrackingEnabled = !string.IsNullOrEmpty(solutionPath);
+        IsTrackingEnabled = !string.IsNullOrEmpty(_repositoryPath);
 
         if (IsTrackingEnabled)
         {
