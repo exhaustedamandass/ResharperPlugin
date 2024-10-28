@@ -1,14 +1,15 @@
-using System.Linq;
 using JetBrains.DocumentModel;
 using JetBrains.ReSharper.Feature.Services.Daemon;
 using JetBrains.ReSharper.Psi;
 using JetBrains.ReSharper.Psi.Tree;
+using JetBrains.Util;
+using JetBrains.Util.dataStructures.TypedIntrinsics;
 using ReSharperPlugin.MyPlugin.GitRepository.Handlers;
 
 namespace ReSharperPlugin.MyPlugin.ElementProblemAnalyzers;
 
-[ElementProblemAnalyzer(typeof(ITokenNode), HighlightingTypes = new []{typeof(CommitModificationInfo)})]
-public class CommitModificationAnalyzer : ElementProblemAnalyzer<ITokenNode>
+[ElementProblemAnalyzer(typeof(IFile), HighlightingTypes = new[] { typeof(CommitModificationInfo) })]
+public class CommitModificationAnalyzer : ElementProblemAnalyzer<IFile>
 {
     private readonly GitRepositoryHandler _gitRepositoryHandler;
 
@@ -16,22 +17,30 @@ public class CommitModificationAnalyzer : ElementProblemAnalyzer<ITokenNode>
     {
         _gitRepositoryHandler = gitRepositoryHandler;
     }
-    
-    protected override void Run(ITokenNode element, ElementProblemAnalyzerData data, IHighlightingConsumer consumer)
+
+    protected override void Run(IFile file, ElementProblemAnalyzerData data, IHighlightingConsumer consumer)
     {
-        if (!_gitRepositoryHandler.IsTrackingEnabled || !_gitRepositoryHandler.IsFileModified(element.GetSourceFile().GetLocation().FullPath))
-            return;
+        // Get the file path for the current file
+        var filePath = file.GetSourceFile()?.GetLocation().FullPath;
+        if (string.IsNullOrEmpty(filePath)) return;
 
-        // Check if the token contains non-whitespace characters
-        var text = element.GetText();
-        var nonWhitespaceIndex = text.Take(5).Select((ch, index) => (ch, index)).FirstOrDefault(pair => !char.IsWhiteSpace(pair.ch)).index;
+        // Retrieve all modification ranges for this file
+        var modificationRanges = _gitRepositoryHandler.GetModificationRanges(filePath);
 
-        if (nonWhitespaceIndex >= 0)
+        if (!modificationRanges.Any()) return;
+
+        // Loop through each modification range and highlight it
+        foreach (var range in modificationRanges)
         {
-            var range = new DocumentRange(element.GetDocumentRange().Document, element.GetDocumentRange().TextRange.StartOffset + nonWhitespaceIndex);
-            var commitMessage = _gitRepositoryHandler.GetCommitMessageForLine(element.GetSourceFile().GetLocation().FullPath, element.GetTreeStartOffset().Offset);
+            // Calculate the document range for the modified text based on the modification range details
+            var lineStartOffset = file.GetDocumentRange().Document.GetLineStartOffset((Int32<DocLine>)range.StartLine);
+            var modificationStartOffset = lineStartOffset + range.StartChar;
+            var modificationEndOffset = modificationStartOffset + range.Length;
 
-            consumer.AddHighlighting(new CommitModificationInfo(range, commitMessage));
+            var modificationRange = new DocumentRange(file.GetDocumentRange().Document, new TextRange(modificationStartOffset, modificationEndOffset));
+
+            // Add highlighting for this modified range
+            consumer.AddHighlighting(new CommitModificationInfo(modificationRange, range.CommitMessage));
         }
     }
 }
