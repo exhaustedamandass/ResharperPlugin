@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Text.RegularExpressions;
+using LibGit2Sharp;
 using JetBrains.ProjectModel;
 using ReSharperPlugin.MyPlugin.GitRepository.Monitors;
 
@@ -16,6 +16,7 @@ public class GitRepositoryHandler
 {
     private GitRepositoryMonitor _gitMonitor;
     private readonly string _repositoryPath;
+    private readonly Repository _repository;
     private Dictionary<string, List<ModificationRange>> _fileModificationRanges;
 
     public bool IsTrackingEnabled { get; private set; }
@@ -35,12 +36,13 @@ public class GitRepositoryHandler
 
         _repositoryPath = GetRepositoryRoot(solutionPath);
         IsTrackingEnabled = !string.IsNullOrEmpty(_repositoryPath);
-
+        
         if (IsTrackingEnabled)
         {
             Console.WriteLine("Solution is located within a Git repository.");
+            _repository = new Repository(_repositoryPath);
             StartMonitoring();
-            UpdateModifiedFilesAndMessages();
+            LoadRecentModifications();
         }
         else
         {
@@ -63,88 +65,86 @@ public class GitRepositoryHandler
     private void OnRepositoryChanged()
     {
         // Refresh modified files and commit messages when repository changes
-        UpdateModifiedFilesAndMessages();
+        LoadRecentModifications();
     }
-
-    private void UpdateModifiedFilesAndMessages()
+    
+    private void LoadRecentModifications(int numberOfCommits = 10)
     {
         _fileModificationRanges.Clear();
 
-        // Retrieve modified files and their details
-        var diffOutput = ExecuteGitCommand("diff HEAD~1 --unified=0"); // Shows 1 commits worth of differences
+        // Retrieve the specified number of recent commits in the current branch
+        var commits = _repository.Commits.Take(numberOfCommits).ToList();
 
-        if (!string.IsNullOrEmpty(diffOutput))
+        foreach (var commit in commits)
         {
-            ParseGitDiffOutput(diffOutput);
-        }
-    }
-    
-    private void ParseGitDiffOutput(string diffOutput)
-    {
-        string currentFile = string.Empty;
-        string currentCommitMessage = string.Empty;
+            var parent = commit.Parents.FirstOrDefault();
+            if (parent != null)
+            {
+                // Get the diff between this commit and its parent
+                var diff = _repository.Diff.Compare<TreeChanges>(parent.Tree, commit.Tree);
 
-        foreach (var line in diffOutput.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries))
-        {
-            if (line.StartsWith("diff --git"))
-            {
-                currentFile = ParseFilePath(line);
-            }
-            else if (line.StartsWith("commit"))
-            {
-                currentCommitMessage = ParseCommitMessage(line);
-            }
-            else if (line.StartsWith("@@") && !string.IsNullOrEmpty(currentFile))
-            {
-                var modificationRange = ParseDiffLineRange(line);
-                modificationRange = modificationRange with { CommitMessage = currentCommitMessage };
-            
-                if (!_fileModificationRanges.ContainsKey(currentFile))
+                foreach (var change in diff)
                 {
-                    _fileModificationRanges[currentFile] = new List<ModificationRange>();
+                    if (change.Status == ChangeKind.Modified)
+                    {
+                        var modifiedFilePath = change.Path;
+                        var modificationRanges = GetModificationRangesForFile(commit, parent, modifiedFilePath);
+
+                        if (!_fileModificationRanges.ContainsKey(modifiedFilePath))
+                        {
+                            _fileModificationRanges[modifiedFilePath] = new List<ModificationRange>();
+                        }
+
+                        _fileModificationRanges[modifiedFilePath].AddRange(modificationRanges);
+                    }
                 }
-                _fileModificationRanges[currentFile].Add(modificationRange);
             }
         }
     }
-    
-    private string ParseFilePath(string line)
-    {
-        // Example line: "diff --git a/path/to/file b/path/to/file"
-        var parts = line.Split(' ');
-        if (parts.Length >= 3)
-        {
-            // Assuming the file path is the part after "a/" or "b/"
-            var filePath = parts[2].Substring(2); // Remove "b/"
-            return filePath;
-        }
-        return string.Empty;
-    }
-    
-    private string ParseCommitMessage(string line)
-    {
-        // Example line: "commit abc1234 Some commit message"
-        var parts = line.Split(' ');
-        if (parts.Length >= 2)
-        {
-            // Join parts after the commit hash as the commit message
-            return string.Join(" ", parts.Skip(2));
-        }
-        return string.Empty;
-    }
 
-    private ModificationRange ParseDiffLineRange(string line)
+    private List<ModificationRange> GetModificationRangesForFile(Commit commit, Commit parent, string filePath)
     {
-        // Example line: "@@ -1,5 +1,5 @@"
-        var match = Regex.Match(line, @"\+(\d+),(\d+)");
-        if (match.Success && int.TryParse(match.Groups[1].Value, out int startLine) &&
-            int.TryParse(match.Groups[2].Value, out int length))
+        var ranges = new List<ModificationRange>();
+
+        // Get the full patch diff between the commit and its parent
+        var patch = _repository.Diff.Compare<Patch>(parent.Tree, commit.Tree);
+
+        // Get the specific file patch for the modified file
+        var filePatch = patch[filePath];
+        if (filePatch == null) return ranges;
+
+        // Parse the Content property for line-by-line changes (unified diff format)
+        var lines = filePatch.Patch.Split('\n');
+        int currentNewLineNumber = 0; // Tracks the current line number in the new file
+
+        foreach (var line in lines)
         {
-            // Assuming we start at character 0 in the line; adjust as needed based on diff format
-            return new ModificationRange(startLine, 0, length, string.Empty);
+            if (line.StartsWith("@@"))
+            {
+                // Parse the line numbers from the diff header (e.g., "@@ -oldLineStart,oldLineCount +newLineStart,newLineCount @@")
+                var match = System.Text.RegularExpressions.Regex.Match(line, @"\+(\d+)");
+                if (match.Success)
+                {
+                    currentNewLineNumber = int.Parse(match.Groups[1].Value);
+                }
+            }
+            else if (line.StartsWith("+") && !line.StartsWith("+++"))
+            {
+                // This is an added line; add it to the ranges
+                ranges.Add(new ModificationRange(currentNewLineNumber, 0, line.Length - 1, commit.MessageShort)); // Exclude '+' sign
+                currentNewLineNumber++;
+            }
+            else if (line.StartsWith("-") || line.StartsWith(" "))
+            {
+                // Skip removed or unchanged lines, but adjust line numbers
+                if (!line.StartsWith("-"))
+                {
+                    currentNewLineNumber++;
+                }
+            }
         }
 
-        return null;
+        return ranges;
     }
 
     public void StopMonitoring() => _gitMonitor.StopMonitoring();
