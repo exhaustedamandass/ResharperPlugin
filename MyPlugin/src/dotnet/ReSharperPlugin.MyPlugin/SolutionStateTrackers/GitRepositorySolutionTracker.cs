@@ -20,9 +20,7 @@ public class GitRepositorySolutionTracker
     private readonly IProperty<string> _solutionName;
 
     [Obsolete("Obsolete")]
-    public GitRepositorySolutionTracker([NotNull] Lifetime lifetime,
-        ISolution solution,
-        ISolutionLoadTasksScheduler scheduler)
+    public GitRepositorySolutionTracker([NotNull] Lifetime lifetime)
     {
         AfterSolutionOpened = new Signal<ISolution>(lifetime, "GitRepositorySolutionTracker.AfterSolutionOpened");
         BeforeSolutionClosed = new Signal<ISolution>(lifetime, "GitRepositorySolutionTracker.BeforeSolutionClosed");
