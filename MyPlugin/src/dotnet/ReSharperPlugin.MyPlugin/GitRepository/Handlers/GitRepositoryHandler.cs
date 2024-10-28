@@ -1,9 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
-using System.Linq;
 using JetBrains.ProjectModel;
-using LibGit2Sharp;
 using ReSharperPlugin.MyPlugin.GitRepository.Monitors;
 
 namespace ReSharperPlugin.MyPlugin.GitRepository.Handlers;
@@ -14,15 +13,15 @@ public class GitRepositoryHandler
     private GitRepositoryMonitor _gitMonitor;
     private readonly string _repositoryPath;
     private Dictionary<string, string> _fileCommitMessages;
-    
+
     public bool IsTrackingEnabled { get; private set; }
 
     public GitRepositoryHandler(ISolution solution)
     {
         _fileCommitMessages = new Dictionary<string, string>();
-        
-        var solutionPath = solution.SolutionDirectory.FullPath;
 
+        var solutionPath = solution.SolutionDirectory.FullPath;
+        
         if (string.IsNullOrEmpty(solutionPath))
         {
             Console.WriteLine("Solution path is null or empty, cannot initialize GitRepositoryHandler.");
@@ -37,6 +36,7 @@ public class GitRepositoryHandler
         {
             Console.WriteLine("Solution is located within a Git repository.");
             StartMonitoring();
+            UpdateModifiedFilesAndMessages();
         }
         else
         {
@@ -47,10 +47,10 @@ public class GitRepositoryHandler
     private void StartMonitoring()
     {
         if (!IsTrackingEnabled) return;
-        
+
         _gitMonitor = new GitRepositoryMonitor(_repositoryPath, OnRepositoryChanged);
     }
-    
+
     private void OnRepositoryChanged()
     {
         // Refresh modified files and commit messages when repository changes
@@ -61,20 +61,26 @@ public class GitRepositoryHandler
     {
         _fileCommitMessages.Clear();
 
-        using (var repo = new Repository(_repositoryPath))
+        // Get recent commits with file modifications
+        var recentCommits = ExecuteGitCommand("log -n 10 --pretty=format:%h --name-only");
+
+        if (!string.IsNullOrEmpty(recentCommits))
         {
-            var recentCommits = repo.Commits.Take(10);
-            foreach (var commit in recentCommits)
+            var lines = recentCommits.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+            string currentCommitHash = string.Empty;
+
+            foreach (var line in lines)
             {
-                foreach (var parent in commit.Parents)
+                if (!line.Contains("/")) // assuming it's a commit hash line
                 {
-                    var changes = repo.Diff.Compare<TreeChanges>(parent.Tree, commit.Tree);
-                    foreach (var change in changes)
+                    currentCommitHash = line;
+                }
+                else // it's a file path
+                {
+                    if (!_fileCommitMessages.ContainsKey(line))
                     {
-                        if (change.Status == ChangeKind.Modified && !_fileCommitMessages.ContainsKey(change.Path))
-                        {
-                            _fileCommitMessages[change.Path] = commit.MessageShort;
-                        }
+                        var commitMessage = ExecuteGitCommand($"log -1 --pretty=format:%s {currentCommitHash}");
+                        _fileCommitMessages[line] = commitMessage;
                     }
                 }
             }
@@ -89,7 +95,7 @@ public class GitRepositoryHandler
     }
 
     public void StopMonitoring() => _gitMonitor.StopMonitoring();
-    
+
     private string GetRepositoryRoot(string solutionPath)
     {
         var directoryInfo = new DirectoryInfo(solutionPath);
@@ -99,5 +105,27 @@ public class GitRepositoryHandler
         }
 
         return directoryInfo?.FullName;
+    }
+
+    private string ExecuteGitCommand(string arguments)
+    {
+        var process = new Process
+        {
+            StartInfo = new ProcessStartInfo
+            {
+                FileName = "git",
+                Arguments = arguments,
+                WorkingDirectory = _repositoryPath,
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            }
+        };
+
+        process.Start();
+        var output = process.StandardOutput.ReadToEnd();
+        process.WaitForExit();
+
+        return output;
     }
 }
