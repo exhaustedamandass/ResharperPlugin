@@ -86,21 +86,26 @@ public class GitRepositoryHandler
         LoadRecentModifications();
     }
 
-    private void LoadRecentModifications(int numberOfCommits = 1)
+    private void LoadRecentModifications(int numberOfCommits = 2)
     {
         _fileModificationRanges.Clear();
 
-        // Retrieve the specified number of recent commits
+        // Retrieve up to the specified number of commits + HEAD
         var commitHashes = ExecuteGitCommand($"log -n {numberOfCommits + 1} --pretty=format:%H").Split('\n');
 
+        // Process each commit except the last one, which acts as a baseline
         for (int i = 0; i < commitHashes.Length - 1; i++)
         {
             var currentCommit = commitHashes[i];
             var parentCommit = commitHashes[i + 1];
 
+            // Retrieve the diff output between the current commit and its parent
             var diffOutput = ExecuteGitCommand($"diff {parentCommit} {currentCommit}");
+
+            // Retrieve the commit message for the current commit
             var commitMessage = ExecuteGitCommand($"show -s --format=%B {currentCommit}");
 
+            // Parse the diff output with the specific commit message
             ParseDiffOutput(diffOutput, commitMessage);
         }
     }
@@ -110,6 +115,7 @@ public class GitRepositoryHandler
         var lines = diffOutput.Split('\n');
         string currentFile = null;
         int currentNewLineNumber = 0;
+        bool insideModificationBlock = false;
 
         foreach (var line in lines)
         {
@@ -119,13 +125,16 @@ public class GitRepositoryHandler
                 if (match.Success)
                 {
                     currentFile = match.Groups[2].Value;
+                    currentNewLineNumber = 0;
+                    insideModificationBlock = true;
+
                     if (!_fileModificationRanges.ContainsKey(currentFile))
                     {
                         _fileModificationRanges[currentFile] = new List<ModificationRange>();
                     }
                 }
             }
-            else if (line.StartsWith("@@"))
+            else if (insideModificationBlock && line.StartsWith("@@"))
             {
                 var match = Regex.Match(line, @"\+(\d+)");
                 if (match.Success)
@@ -133,9 +142,8 @@ public class GitRepositoryHandler
                     currentNewLineNumber = int.Parse(match.Groups[1].Value);
                 }
             }
-            else if (line.StartsWith("+") && !line.StartsWith("+++"))
+            else if (insideModificationBlock && line.StartsWith("+") && !line.StartsWith("+++"))
             {
-                // Check if the line is empty (ignoring the "+")
                 var lineContent = line.Substring(1);
                 if (string.IsNullOrWhiteSpace(lineContent))
                 {
@@ -143,12 +151,25 @@ public class GitRepositoryHandler
                     continue;
                 }
 
-                // Find the index of the first non-whitespace character
-                int startingCharacterIndex = lineContent.TakeWhile(char.IsWhiteSpace).Count();
+                // Find the first 5 non-whitespace characters in the line
+                int highlightedCharCount = 0;
+                int startHighlightOffset = -1;
+                for (int i = 0; i < lineContent.Length && highlightedCharCount < 5; i++)
+                {
+                    if (!char.IsWhiteSpace(lineContent[i]))
+                    {
+                        if (highlightedCharCount == 0) startHighlightOffset = i;
+                        highlightedCharCount++;
+                    }
+                }
 
-                // Add the new modification range
-                _fileModificationRanges[currentFile ?? throw new ArgumentNullException(nameof(currentFile))]
-                    .Add(new ModificationRange(currentNewLineNumber, startingCharacterIndex, lineContent.Length - startingCharacterIndex, commitMessage));
+                // If we found characters to highlight, add the range to the modification list
+                if (highlightedCharCount > 0 && startHighlightOffset != -1)
+                {
+                    _fileModificationRanges[currentFile ?? throw new ArgumentNullException(nameof(currentFile))]
+                        .Add(new ModificationRange(currentNewLineNumber, startHighlightOffset, highlightedCharCount, commitMessage));
+                }
+
                 currentNewLineNumber++;
             }
             else if (line.StartsWith(" ") || line.StartsWith("-"))
@@ -160,6 +181,7 @@ public class GitRepositoryHandler
             }
         }
     }
+
 
 
     public void StopMonitoring() => _gitMonitor.StopMonitoring();
