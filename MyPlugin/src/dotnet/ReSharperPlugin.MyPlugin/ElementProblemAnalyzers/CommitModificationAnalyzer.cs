@@ -5,6 +5,8 @@ using JetBrains.ReSharper.Psi.Tree;
 using JetBrains.Util;
 using JetBrains.Util.dataStructures.TypedIntrinsics;
 using ReSharperPlugin.MyPlugin.GitRepository.Handlers;
+using System;
+using System.Linq;
 
 namespace ReSharperPlugin.MyPlugin.ElementProblemAnalyzers;
 
@@ -32,17 +34,53 @@ public class CommitModificationAnalyzer : ElementProblemAnalyzer<IFile>
 
         if (!modificationRanges.Any()) return;
 
-        // Loop through each modification range and highlight it
+        // Sort modification ranges by starting line, then by start character position
+        modificationRanges = modificationRanges.OrderBy(range => range.StartLine)
+                                               .ThenBy(range => range.StartChar)
+                                               .ToList();
+
+        // Get the document's total length to ensure offsets stay in bounds
+        var document = file.GetDocumentRange().Document;
+        var documentLength = document.GetTextLength();
+
+        // Highlight only the first 5 non-whitespace characters in the first modified line
         foreach (var range in modificationRanges)
         {
-            var lineStartOffset = file.GetDocumentRange().Document.GetLineStartOffset((Int32<DocLine>)range.StartLine);
+            // Calculate the document range for the modified text based on the modification range details
+            var lineStartOffset = document.GetLineStartOffset((Int32<DocLine>)(range.StartLine - 1)); 
             var modificationStartOffset = lineStartOffset + range.StartChar;
-            var modificationEndOffset = modificationStartOffset + range.Length;
+            var modificationEndOffset = Math.Min(modificationStartOffset + range.Length, documentLength);
 
-            var modificationRange = new DocumentRange(file.GetDocumentRange().Document, new TextRange(modificationStartOffset, modificationEndOffset));
+            // Extract the modified text from the document and identify first 5 non-whitespace characters
+            var modifiedText = document.GetText(new TextRange(modificationStartOffset, modificationEndOffset));
 
-            // Add highlighting for this modified range
-            consumer.AddHighlighting(new CommitModificationInfo(modificationRange, range.CommitMessage));
+            int highlightedCharCount = 0;
+            int startHighlightOffset = -1;
+            int endHighlightOffset = modificationStartOffset;
+
+            for (int i = 0; i < modifiedText.Length && highlightedCharCount < 5; i++)
+            {
+                // Skip whitespace and braces '{', '}', highlighting only meaningful code
+                if (!char.IsWhiteSpace(modifiedText[i]) && modifiedText[i] != '{' && modifiedText[i] != '}')
+                {
+                    if (highlightedCharCount == 0) startHighlightOffset = modificationStartOffset + i;
+                    highlightedCharCount++;
+                    endHighlightOffset = modificationStartOffset + i + 1;
+                }
+            }
+
+            // If at least one non-whitespace character is highlighted, create a highlight range
+            if (highlightedCharCount > 0 && startHighlightOffset != -1)
+            {
+                var highlightRange = new DocumentRange(document, new TextRange(startHighlightOffset, endHighlightOffset));
+
+                // Add highlighting for this modified range with the commit message
+                consumer.AddHighlighting(new CommitModificationInfo(highlightRange, range.CommitMessage));
+            }
+
+            // Stop after highlighting the first modified line
+            break;
         }
     }
+
 }

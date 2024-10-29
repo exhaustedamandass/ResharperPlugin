@@ -1,9 +1,11 @@
 using JetBrains.DocumentModel;
 using JetBrains.ReSharper.Feature.Services.Daemon;
+using JetBrains.ReSharper.Feature.Services.Daemon.Attributes;
 
 namespace ReSharperPlugin.MyPlugin.ElementProblemAnalyzers;
 
-[StaticSeverityHighlighting(Severity.INFO, typeof(HighlightingGroupIds.GutterMarks))]
+[StaticSeverityHighlighting(Severity.INFO, typeof(HighlightingGroupIds.GutterMarks), 
+    AttributeId = AnalysisHighlightingAttributeIds.WARNING)]
 public class CommitModificationInfo : IHighlighting
 {
     private readonly DocumentRange _range;

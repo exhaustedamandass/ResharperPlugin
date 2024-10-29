@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Text.RegularExpressions;
 using JetBrains.ProjectModel;
 using ReSharperPlugin.MyPlugin.GitRepository.Monitors;
@@ -61,10 +62,16 @@ public class GitRepositoryHandler
             .ToString()
             .Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar));
     }
-    
+
+    private string NormalizePath(string path)
+    {
+        return path?.Replace('\\', '/');
+    }
+
     public List<ModificationRange> GetModificationRanges(string filePath)
     {
-        return _fileModificationRanges.TryGetValue(filePath, out var ranges) ? ranges : new List<ModificationRange>();
+        var normalizedPath = NormalizePath(filePath);
+        return _fileModificationRanges.TryGetValue(normalizedPath, out var ranges) ? ranges : new List<ModificationRange>();
     }
 
     private void StartMonitoring()
@@ -78,21 +85,23 @@ public class GitRepositoryHandler
     {
         LoadRecentModifications();
     }
-    
+
     private void LoadRecentModifications(int numberOfCommits = 1)
     {
         _fileModificationRanges.Clear();
 
         // Retrieve the specified number of recent commits
         var commitHashes = ExecuteGitCommand($"log -n {numberOfCommits + 1} --pretty=format:%H").Split('\n');
-        
+
         for (int i = 0; i < commitHashes.Length - 1; i++)
         {
             var currentCommit = commitHashes[i];
             var parentCommit = commitHashes[i + 1];
 
             var diffOutput = ExecuteGitCommand($"diff {parentCommit} {currentCommit}");
-            ParseDiffOutput(diffOutput, currentCommit);
+            var commitMessage = ExecuteGitCommand($"show -s --format=%B {currentCommit}");
+
+            ParseDiffOutput(diffOutput, commitMessage);
         }
     }
 
@@ -126,8 +135,20 @@ public class GitRepositoryHandler
             }
             else if (line.StartsWith("+") && !line.StartsWith("+++"))
             {
+                // Check if the line is empty (ignoring the "+")
+                var lineContent = line.Substring(1);
+                if (string.IsNullOrWhiteSpace(lineContent))
+                {
+                    currentNewLineNumber++;
+                    continue;
+                }
+
+                // Find the index of the first non-whitespace character
+                int startingCharacterIndex = lineContent.TakeWhile(char.IsWhiteSpace).Count();
+
+                // Add the new modification range
                 _fileModificationRanges[currentFile ?? throw new ArgumentNullException(nameof(currentFile))]
-                    .Add(new ModificationRange(currentNewLineNumber, 0, line.Length - 1, commitMessage));
+                    .Add(new ModificationRange(currentNewLineNumber, startingCharacterIndex, lineContent.Length - startingCharacterIndex, commitMessage));
                 currentNewLineNumber++;
             }
             else if (line.StartsWith(" ") || line.StartsWith("-"))
@@ -139,6 +160,7 @@ public class GitRepositoryHandler
             }
         }
     }
+
 
     public void StopMonitoring() => _gitMonitor.StopMonitoring();
 
