@@ -10,7 +10,6 @@ using JetBrains.ReSharper.Feature.Services.Resources;
 
 namespace ReSharperPlugin.MyPlugin.Options;
 
-//can play with the icon
 [OptionsPage(Pid, "R# Git plugin", typeof(FeaturesEnvironmentOptionsThemedIcons.GeneratedCode), ParentId = ToolsPage.PID)]
 public class OptionsPage : BeSimpleOptionsPage
 {
@@ -33,6 +32,6 @@ public class OptionsPage : BeSimpleOptionsPage
 [JetBrains.Application.Settings.SettingsKey(typeof(EnvironmentSettings), "My settings")]
 public class MySettingsKey
 {
-    [JetBrains.Application.Settings.SettingsEntry(5, "Number of commits")]
+    [JetBrains.Application.Settings.SettingsEntry(2, "Number of commits")]
     public int NCommits;
 }
