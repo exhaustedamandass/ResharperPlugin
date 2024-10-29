@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using JetBrains.ProjectModel;
 using ReSharperPlugin.MyPlugin.GitRepository.Monitors;
+using ReSharperPlugin.MyPlugin.Options.UI;
 
 namespace ReSharperPlugin.MyPlugin.GitRepository.Handlers;
 
@@ -18,7 +19,7 @@ public class GitRepositoryHandler
     private readonly string _repositoryPath;
     private Dictionary<string, List<ModificationRange>> _fileModificationRanges;
 
-    public bool IsTrackingEnabled { get; private set; }
+    private bool IsTrackingEnabled { get; set; }
 
     public GitRepositoryHandler(ISolution solution)
     {
@@ -39,8 +40,8 @@ public class GitRepositoryHandler
         if (IsTrackingEnabled)
         {
             Console.WriteLine("Solution is located within a Git repository.");
+            LoadRecentModifications(GetNCommits());
             StartMonitoring();
-            LoadRecentModifications();
         }
         else
         {
@@ -71,7 +72,9 @@ public class GitRepositoryHandler
     public List<ModificationRange> GetModificationRanges(string filePath)
     {
         var normalizedPath = NormalizePath(filePath);
-        return _fileModificationRanges.TryGetValue(normalizedPath, out var ranges) ? ranges : new List<ModificationRange>();
+        return _fileModificationRanges.TryGetValue(normalizedPath, out var ranges)
+            ? ranges
+            : [];
     }
 
     private void StartMonitoring()
@@ -83,10 +86,15 @@ public class GitRepositoryHandler
 
     private void OnRepositoryChanged()
     {
-        LoadRecentModifications();
+        LoadRecentModifications(GetNCommits());
     }
 
-    private void LoadRecentModifications(int numberOfCommits = 2)
+    private int GetNCommits()
+    {
+        return OptionsPageViewModel.Instance.GetNCommits();
+    }
+    
+    private void LoadRecentModifications(int numberOfCommits)
     {
         _fileModificationRanges.Clear();
 
@@ -94,7 +102,7 @@ public class GitRepositoryHandler
         var commitHashes = ExecuteGitCommand($"log -n {numberOfCommits + 1} --pretty=format:%H").Split('\n');
 
         // Process each commit except the last one, which acts as a baseline
-        for (int i = 0; i < commitHashes.Length - 1; i++)
+        for (var i = 0; i < commitHashes.Length - 1; i++)
         {
             var currentCommit = commitHashes[i];
             var parentCommit = commitHashes[i + 1];
@@ -167,7 +175,8 @@ public class GitRepositoryHandler
                 if (highlightedCharCount > 0 && startHighlightOffset != -1)
                 {
                     _fileModificationRanges[currentFile ?? throw new ArgumentNullException(nameof(currentFile))]
-                        .Add(new ModificationRange(currentNewLineNumber, startHighlightOffset, highlightedCharCount, commitMessage));
+                        .Add(new ModificationRange(currentNewLineNumber, startHighlightOffset, highlightedCharCount,
+                            commitMessage));
                 }
 
                 currentNewLineNumber++;
