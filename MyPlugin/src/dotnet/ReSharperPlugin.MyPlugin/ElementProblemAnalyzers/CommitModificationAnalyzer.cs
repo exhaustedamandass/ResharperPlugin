@@ -20,19 +20,21 @@ public class CommitModificationAnalyzer : ElementProblemAnalyzer<IFile>
 
     protected override void Run(IFile file, ElementProblemAnalyzerData data, IHighlightingConsumer consumer)
     {
-        // Get the file path for the current file
+        // Get the full file path for the current file
         var filePath = file.GetSourceFile()?.GetLocation().FullPath;
         if (string.IsNullOrEmpty(filePath)) return;
 
-        // Retrieve all modification ranges for this file
-        var modificationRanges = _gitRepositoryHandler.GetModificationRanges(filePath);
+        // Convert the file path to a repository-relative path using the GitRepositoryHandler
+        var relativeFilePath = _gitRepositoryHandler.GetRelativePath(filePath);
+
+        // Retrieve all modification ranges for this relative file path
+        var modificationRanges = _gitRepositoryHandler.GetModificationRanges(relativeFilePath);
 
         if (!modificationRanges.Any()) return;
 
         // Loop through each modification range and highlight it
         foreach (var range in modificationRanges)
         {
-            // Calculate the document range for the modified text based on the modification range details
             var lineStartOffset = file.GetDocumentRange().Document.GetLineStartOffset((Int32<DocLine>)range.StartLine);
             var modificationStartOffset = lineStartOffset + range.StartChar;
             var modificationEndOffset = modificationStartOffset + range.Length;
