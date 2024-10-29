@@ -9,8 +9,6 @@
 
   <ItemGroup>
     <PackageReference Include="JetBrains.ReSharper.SDK" Version="$(SdkVersion)" PrivateAssets="all" />
-    <PackageReference Include="LibGit2Sharp" Version="0.26.2" />
-    <PackageReference Include="LibGit2Sharp.NativeBinaries" Version="2.0.322" />
     <PackageReference Include="Wave" Version="$(WaveVersion)" />
   </ItemGroup>
 
@@ -20,7 +18,6 @@
     <Content Include="bin\$(AssemblyName)\$(Configuration)\$(AssemblyName).pdb" PackagePath="dotFiles" Pack="true" Visible="false" />
 
     <!-- Copy LibGit2 native binaries to the output directory -->
-    <Content Include="$(NuGetPackageRoot)libgit2sharp.nativebinaries\**\*.*" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>
