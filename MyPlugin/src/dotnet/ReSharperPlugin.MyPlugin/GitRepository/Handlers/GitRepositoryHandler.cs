@@ -47,6 +47,21 @@ public class GitRepositoryHandler
         }
     }
     
+    public string GetRelativePath(string fullPath)
+    {
+        if (string.IsNullOrEmpty(fullPath) || string.IsNullOrEmpty(_repositoryPath))
+        {
+            return fullPath;
+        }
+
+        var repoUri = new Uri(_repositoryPath + Path.DirectorySeparatorChar);
+        var fileUri = new Uri(fullPath);
+
+        return Uri.UnescapeDataString(repoUri.MakeRelativeUri(fileUri)
+            .ToString()
+            .Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar));
+    }
+    
     public List<ModificationRange> GetModificationRanges(string filePath)
     {
         return _fileModificationRanges.TryGetValue(filePath, out var ranges) ? ranges : new List<ModificationRange>();
@@ -64,12 +79,12 @@ public class GitRepositoryHandler
         LoadRecentModifications();
     }
     
-    private void LoadRecentModifications(int numberOfCommits = 10)
+    private void LoadRecentModifications(int numberOfCommits = 1)
     {
         _fileModificationRanges.Clear();
 
         // Retrieve the specified number of recent commits
-        var commitHashes = ExecuteGitCommand($"log -n {numberOfCommits} --pretty=format:%H").Split('\n');
+        var commitHashes = ExecuteGitCommand($"log -n {numberOfCommits + 1} --pretty=format:%H").Split('\n');
         
         for (int i = 0; i < commitHashes.Length - 1; i++)
         {
