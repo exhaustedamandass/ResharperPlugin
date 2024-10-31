@@ -4,9 +4,12 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
+using JetBrains.Application.Settings;
+using JetBrains.DataFlow;
+using JetBrains.Lifetimes;
 using JetBrains.ProjectModel;
 using ReSharperPlugin.MyPlugin.GitRepository.Monitors;
-using ReSharperPlugin.MyPlugin.Options.UI;
+using ReSharperPlugin.MyPlugin.Options;
 
 namespace ReSharperPlugin.MyPlugin.GitRepository.Handlers;
 
@@ -18,10 +21,11 @@ public class GitRepositoryHandler
     private GitRepositoryMonitor _gitMonitor;
     private readonly string _repositoryPath;
     private Dictionary<string, List<ModificationRange>> _fileModificationRanges;
+    private IProperty<int> NCommitsProperty { get; set; }
 
     private bool IsTrackingEnabled { get; set; }
 
-    public GitRepositoryHandler(ISolution solution)
+    public GitRepositoryHandler(ISolution solution, Lifetime lifetime, ISettingsStore settingsStore)
     {
         _fileModificationRanges = new Dictionary<string, List<ModificationRange>>();
 
@@ -33,6 +37,17 @@ public class GitRepositoryHandler
             IsTrackingEnabled = false;
             return;
         }
+
+        NCommitsProperty = settingsStore.BindToContextLive(lifetime, ContextRange.ApplicationWide)
+            .GetValueProperty(lifetime, (MySettingsKey key) => key.NCommits);
+
+        // Listen to changes to keep track of any updates
+        NCommitsProperty.Change.Advise(lifetime, args =>
+        {
+            if (!args.HasNew) return;
+            Console.WriteLine($"NCommits setting updated: {args.New}");
+            OnRepositoryChanged();
+        });
 
         _repositoryPath = GetRepositoryRoot(solutionPath);
         IsTrackingEnabled = !string.IsNullOrEmpty(_repositoryPath);
@@ -91,10 +106,10 @@ public class GitRepositoryHandler
 
     private int GetNCommits()
     {
-        return OptionsPageViewModel.Instance.GetNCommits();
+        return NCommitsProperty.Value;
     }
-    
-    private void LoadRecentModifications(int numberOfCommits)
+
+    private void LoadRecentModifications(int numberOfCommits = 1)
     {
         _fileModificationRanges.Clear();
 
@@ -122,8 +137,8 @@ public class GitRepositoryHandler
     {
         var lines = diffOutput.Split('\n');
         string currentFile = null;
-        int currentNewLineNumber = 0;
-        bool insideModificationBlock = false;
+        var currentNewLineNumber = 0;
+        var insideModificationBlock = false;
 
         foreach (var line in lines)
         {
@@ -160,9 +175,9 @@ public class GitRepositoryHandler
                 }
 
                 // Find the first 5 non-whitespace characters in the line
-                int highlightedCharCount = 0;
-                int startHighlightOffset = -1;
-                for (int i = 0; i < lineContent.Length && highlightedCharCount < 5; i++)
+                var highlightedCharCount = 0;
+                var startHighlightOffset = -1;
+                for (var i = 0; i < lineContent.Length && highlightedCharCount < 5; i++)
                 {
                     if (!char.IsWhiteSpace(lineContent[i]))
                     {
@@ -190,10 +205,6 @@ public class GitRepositoryHandler
             }
         }
     }
-
-
-
-    public void StopMonitoring() => _gitMonitor.StopMonitoring();
 
     private string GetRepositoryRoot(string solutionPath)
     {

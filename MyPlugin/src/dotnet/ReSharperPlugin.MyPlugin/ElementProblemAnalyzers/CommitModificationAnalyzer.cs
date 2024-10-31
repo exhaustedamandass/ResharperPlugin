@@ -54,9 +54,9 @@ public class CommitModificationAnalyzer : ElementProblemAnalyzer<IFile>
             // Extract the modified text from the document and identify first 5 non-whitespace characters
             var modifiedText = document.GetText(new TextRange(modificationStartOffset, modificationEndOffset));
 
-            int highlightedCharCount = 0;
-            int startHighlightOffset = -1;
-            int endHighlightOffset = modificationStartOffset;
+            var highlightedCharCount = 0;
+            var startHighlightOffset = -1;
+            var endHighlightOffset = modificationStartOffset;
 
             for (int i = 0; i < modifiedText.Length && highlightedCharCount < 5; i++)
             {
