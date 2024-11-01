@@ -1,6 +1,5 @@
 using JetBrains.DocumentModel;
 using JetBrains.ReSharper.Feature.Services.Daemon;
-using JetBrains.ReSharper.Psi;
 using JetBrains.ReSharper.Psi.Tree;
 using JetBrains.Util;
 using JetBrains.Util.dataStructures.TypedIntrinsics;
@@ -9,7 +8,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using ReSharperPlugin.MyPlugin.DataModels;
-using ReSharperPlugin.MyPlugin.GitRepository.Helpers;
+using ReSharperPlugin.MyPlugin.Helpers;
 
 namespace ReSharperPlugin.MyPlugin.ElementProblemAnalyzers;
 
@@ -25,7 +24,7 @@ public class CommitModificationAnalyzer : ElementProblemAnalyzer<IFile>
 
     protected override void Run(IFile file, ElementProblemAnalyzerData data, IHighlightingConsumer consumer)
     {
-        var filePath = GetFilePath(file);
+        var filePath = FileOperationsHelper.GetFilePath(file);
         if (string.IsNullOrEmpty(filePath)) return;
 
         var relativeFilePath =
@@ -34,13 +33,6 @@ public class CommitModificationAnalyzer : ElementProblemAnalyzer<IFile>
         if (!modificationRanges.Any()) return;
 
         HighlightFirstModifiedLine(file, modificationRanges, consumer);
-    }
-
-    //TODO: reused part, extract into a separate class
-    private string GetFilePath(IFile file)
-    {
-        // Get the full file path for the current file
-        return file.GetSourceFile()?.GetLocation().FullPath;
     }
 
     private List<ModificationRange> GetSortedModificationRanges(string relativeFilePath)

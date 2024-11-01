@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 using JetBrains.DataFlow;
 using JetBrains.Lifetimes;
 using JetBrains.ProjectModel;
-using ReSharperPlugin.MyPlugin.GitRepository.Helpers;
+using ReSharperPlugin.MyPlugin.Helpers;
 
 namespace ReSharperPlugin.MyPlugin.GitRepository.Monitors;
 
