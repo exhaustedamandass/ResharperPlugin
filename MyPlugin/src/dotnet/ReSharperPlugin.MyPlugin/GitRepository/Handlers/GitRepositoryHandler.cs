@@ -2,12 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.Linq;
 using System.Text.RegularExpressions;
 using JetBrains.Application.Settings;
 using JetBrains.DataFlow;
 using JetBrains.Lifetimes;
 using JetBrains.ProjectModel;
+using JetBrains.ReSharper.Feature.Services.Daemon;
 using ReSharperPlugin.MyPlugin.GitRepository.Monitors;
 using ReSharperPlugin.MyPlugin.Options;
 
@@ -55,7 +55,6 @@ public class GitRepositoryHandler
         if (IsTrackingEnabled)
         {
             Console.WriteLine("Solution is located within a Git repository.");
-            LoadRecentModifications(GetNCommits());
             StartMonitoring();
         }
         else

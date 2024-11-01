@@ -82,5 +82,4 @@ public class CommitModificationAnalyzer : ElementProblemAnalyzer<IFile>
             break;
         }
     }
-
 }
