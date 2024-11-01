@@ -1,32 +1,38 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
 
 namespace ReSharperPlugin.MyPlugin.GitRepository.Helpers;
 
 public static class FileOperationsHelper
 {
-    public static string ReadFileContents(string filePath)
+    public static string GetRelativePath(string fullPath, string repositoryPath)
     {
-        if (!File.Exists(filePath))
+        if (string.IsNullOrEmpty(fullPath) || string.IsNullOrEmpty(repositoryPath))
         {
-            Console.WriteLine($"File {filePath} not found.");
-            return null;
+            return fullPath;
         }
-        return File.ReadAllText(filePath);
-    }
 
-    // Find the positions of the first 'n' non-whitespace characters in a string
-    public static List<int> FindFirstNonWhitespacePositions(string content, int n)
+        var repoUri = new Uri(repositoryPath + Path.DirectorySeparatorChar);
+        var fileUri = new Uri(fullPath);
+
+        return Uri.UnescapeDataString(repoUri.MakeRelativeUri(fileUri)
+            .ToString()
+            .Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar));
+    }
+    
+    public static string GetRepositoryRoot(string solutionPath)
     {
-        List<int> positions = new List<int>();
-        for (int i = 0; i < content.Length && positions.Count < n; i++)
+        var directoryInfo = new DirectoryInfo(solutionPath);
+        while (directoryInfo != null && !Directory.Exists(Path.Combine(directoryInfo.FullName, ".git")))
         {
-            if (!char.IsWhiteSpace(content[i]))
-            {
-                positions.Add(i);
-            }
+            directoryInfo = directoryInfo.Parent;
         }
-        return positions;
+
+        return directoryInfo?.FullName;
+    }
+    
+    public static string NormalizePath(string path)
+    {
+        return path?.Replace('\\', '/');
     }
 }
