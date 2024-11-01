@@ -6,8 +6,8 @@ using JetBrains.DataFlow;
 using JetBrains.Lifetimes;
 using JetBrains.ProjectModel;
 using ReSharperPlugin.MyPlugin.DataModels;
-using ReSharperPlugin.MyPlugin.GitRepository.Helpers;
 using ReSharperPlugin.MyPlugin.GitRepository.Monitors;
+using ReSharperPlugin.MyPlugin.Helpers;
 using ReSharperPlugin.MyPlugin.Options;
 
 namespace ReSharperPlugin.MyPlugin.GitRepository.Handlers;

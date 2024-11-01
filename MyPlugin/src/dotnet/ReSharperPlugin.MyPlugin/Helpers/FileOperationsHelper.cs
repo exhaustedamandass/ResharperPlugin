@@ -1,7 +1,9 @@
 using System;
 using System.IO;
+using JetBrains.ReSharper.Psi;
+using JetBrains.ReSharper.Psi.Tree;
 
-namespace ReSharperPlugin.MyPlugin.GitRepository.Helpers;
+namespace ReSharperPlugin.MyPlugin.Helpers;
 
 public static class FileOperationsHelper
 {
@@ -34,5 +36,11 @@ public static class FileOperationsHelper
     public static string NormalizePath(string path)
     {
         return path?.Replace('\\', '/');
+    }
+    
+    public static string GetFilePath(IFile file)
+    {
+        // Get the full file path for the current file
+        return file.GetSourceFile()?.GetLocation().FullPath;
     }
 }

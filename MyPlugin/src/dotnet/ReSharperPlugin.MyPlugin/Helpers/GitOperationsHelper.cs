@@ -1,6 +1,6 @@
 using System.Diagnostics;
 
-namespace ReSharperPlugin.MyPlugin.GitRepository.Helpers;
+namespace ReSharperPlugin.MyPlugin.Helpers;
 
 public static class GitOperationsHelper
 {
