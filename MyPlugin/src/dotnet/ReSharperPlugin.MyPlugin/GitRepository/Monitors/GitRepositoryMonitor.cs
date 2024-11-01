@@ -1,17 +1,34 @@
 using System;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
+using JetBrains.DataFlow;
+using JetBrains.Lifetimes;
+using JetBrains.ProjectModel;
 
 namespace ReSharperPlugin.MyPlugin.GitRepository.Monitors;
 
-public class GitRepositoryMonitor
+[SolutionComponent]
+public class GitRepositoryMonitor : IDisposable
 {
     private readonly FileSystemWatcher _gitWatcher;
-    private readonly Action _onRepositoryChanged;
+    private CancellationTokenSource _debounceCts;
 
-    public GitRepositoryMonitor(string repositoryPath, Action onRepositoryChanged)
+    // Signal to notify about repository changes
+    public ISimpleSignal RepositoryChangedSignal { get; }
+
+    public GitRepositoryMonitor(Lifetime lifetime, ISolution solution)
     {
-        _onRepositoryChanged = onRepositoryChanged;
+        RepositoryChangedSignal = new SimpleSignal(lifetime, "GitRepositoryMonitor.RepositoryChanged");
+
+        var repositoryPath = GetRepositoryRoot(solution.SolutionDirectory.FullPath);
+        if (string.IsNullOrEmpty(repositoryPath))
+        {
+            Console.WriteLine("Solution is not located in a Git repository, monitoring not started.");
+            return;
+        }
+
+        _debounceCts = new CancellationTokenSource();
 
         // Initialize FileSystemWatcher to monitor the .git directory
         _gitWatcher = new FileSystemWatcher(Path.Combine(repositoryPath, ".git"))
@@ -32,18 +49,34 @@ public class GitRepositoryMonitor
 
     private void OnGitDirectoryChanged(object sender, FileSystemEventArgs e)
     {
-        // Debounce multiple events triggered by a single Git operation
-        Task.Delay(500).ContinueWith(_ =>
+        Console.WriteLine($"Detected Git repository change: {e.ChangeType} in {e.FullPath}");
+
+        // Debounce multiple events
+        _debounceCts.Cancel();
+        _debounceCts.Dispose();
+        _debounceCts = new CancellationTokenSource();
+        var debounceToken = _debounceCts.Token;
+
+        Task.Delay(500, debounceToken).ContinueWith(t =>
         {
-            Console.WriteLine($"Detected Git repository change: {e.ChangeType} in {e.FullPath}");
-            _onRepositoryChanged?.Invoke(); // Notify that the repository has changed
-        });
+            if (!t.IsCanceled)
+            {
+                RepositoryChangedSignal.Fire(); // Fire the signal to notify listeners
+                Console.WriteLine("Repository change detected, signal fired.");
+            }
+        }, debounceToken);
     }
 
-    public void StopMonitoring()
+    public void Dispose()
     {
-        _gitWatcher.EnableRaisingEvents = false;
         _gitWatcher.Dispose();
-        Console.WriteLine("Stopped monitoring Git repository.");
+        _debounceCts?.Dispose();
+    }
+
+    private string GetRepositoryRoot(string solutionPath)
+    {
+        // Logic to find the repository root if needed
+        // Return the root path of the Git repository
+        return solutionPath; // Placeholder, implement repository root finding logic
     }
 }

@@ -18,14 +18,13 @@ public record ModificationRange(int StartLine, int StartChar, int Length, string
 [SolutionComponent]
 public class GitRepositoryHandler
 {
-    private GitRepositoryMonitor _gitMonitor;
     private readonly string _repositoryPath;
     private Dictionary<string, List<ModificationRange>> _fileModificationRanges;
     private IProperty<int> NCommitsProperty { get; set; }
 
     private bool IsTrackingEnabled { get; set; }
 
-    public GitRepositoryHandler(ISolution solution, Lifetime lifetime, ISettingsStore settingsStore)
+    public GitRepositoryHandler(ISolution solution, Lifetime lifetime, ISettingsStore settingsStore, GitRepositoryMonitor gitRepositoryMonitor)
     {
         _fileModificationRanges = new Dictionary<string, List<ModificationRange>>();
 
@@ -50,12 +49,17 @@ public class GitRepositoryHandler
         });
 
         _repositoryPath = GetRepositoryRoot(solutionPath);
+
+        gitRepositoryMonitor.RepositoryChangedSignal.Advise(lifetime, _ =>
+        {
+            OnRepositoryChanged(); // React to the repository change signal
+        });
+
         IsTrackingEnabled = !string.IsNullOrEmpty(_repositoryPath);
         
         if (IsTrackingEnabled)
         {
             Console.WriteLine("Solution is located within a Git repository.");
-            StartMonitoring();
         }
         else
         {
@@ -89,13 +93,6 @@ public class GitRepositoryHandler
         return _fileModificationRanges.TryGetValue(normalizedPath, out var ranges)
             ? ranges
             : [];
-    }
-
-    private void StartMonitoring()
-    {
-        if (!IsTrackingEnabled) return;
-
-        _gitMonitor = new GitRepositoryMonitor(_repositoryPath, OnRepositoryChanged);
     }
 
     private void OnRepositoryChanged()
