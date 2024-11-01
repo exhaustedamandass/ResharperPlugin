@@ -1,11 +1,11 @@
-﻿using JetBrains.Application.Settings;
+﻿using System;
+using JetBrains.Application.Settings;
+using JetBrains.Lifetimes;
 using JetBrains.ProjectModel;
 using JetBrains.ReSharper.Feature.Services.Daemon;
-using System;
-using JetBrains.Lifetimes;
+using ReSharperPlugin.MyPlugin.Options;
 
-namespace ReSharperPlugin.MyPlugin.Options.ChangeHandlers;
-
+namespace ReSharperPlugin.MyPlugin.ChangeHandlers;
 
 [SolutionComponent]
 public class NCommitsChangeHandler

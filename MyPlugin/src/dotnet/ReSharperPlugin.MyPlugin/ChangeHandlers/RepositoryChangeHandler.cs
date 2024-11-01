@@ -1,10 +1,10 @@
-﻿using JetBrains.ProjectModel;
+﻿using System;
+using JetBrains.Lifetimes;
+using JetBrains.ProjectModel;
 using JetBrains.ReSharper.Feature.Services.Daemon;
 using ReSharperPlugin.MyPlugin.GitRepository.Monitors;
-using System;
-using JetBrains.Lifetimes;
 
-namespace ReSharperPlugin.MyPlugin.GitRepository.ChangeHandlers;
+namespace ReSharperPlugin.MyPlugin.ChangeHandlers;
 
 [SolutionComponent]
 public class RepositoryChangeHandler
