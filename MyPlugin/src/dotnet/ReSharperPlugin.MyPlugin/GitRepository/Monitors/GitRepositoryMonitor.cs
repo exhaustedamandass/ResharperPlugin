@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using JetBrains.DataFlow;
 using JetBrains.Lifetimes;
 using JetBrains.ProjectModel;
+using ReSharperPlugin.MyPlugin.GitRepository.Helpers;
 
 namespace ReSharperPlugin.MyPlugin.GitRepository.Monitors;
 
@@ -17,11 +18,12 @@ public class GitRepositoryMonitor : IDisposable
     // Signal to notify about repository changes
     public ISimpleSignal RepositoryChangedSignal { get; }
 
+    [Obsolete("Obsolete")]
     public GitRepositoryMonitor(Lifetime lifetime, ISolution solution)
     {
         RepositoryChangedSignal = new SimpleSignal(lifetime, "GitRepositoryMonitor.RepositoryChanged");
 
-        var repositoryPath = GetRepositoryRoot(solution.SolutionDirectory.FullPath);
+        var repositoryPath = FileOperationsHelper.GetRepositoryRoot(solution.SolutionDirectory.FullPath);
         if (string.IsNullOrEmpty(repositoryPath))
         {
             Console.WriteLine("Solution is not located in a Git repository, monitoring not started.");
@@ -71,12 +73,5 @@ public class GitRepositoryMonitor : IDisposable
     {
         _gitWatcher.Dispose();
         _debounceCts?.Dispose();
-    }
-
-    private string GetRepositoryRoot(string solutionPath)
-    {
-        // Logic to find the repository root if needed
-        // Return the root path of the Git repository
-        return solutionPath; // Placeholder, implement repository root finding logic
     }
 }

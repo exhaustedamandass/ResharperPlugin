@@ -6,7 +6,10 @@ using JetBrains.Util;
 using JetBrains.Util.dataStructures.TypedIntrinsics;
 using ReSharperPlugin.MyPlugin.GitRepository.Handlers;
 using System;
+using System.Collections.Generic;
 using System.Linq;
+using ReSharperPlugin.MyPlugin.DataModels;
+using ReSharperPlugin.MyPlugin.GitRepository.Helpers;
 
 namespace ReSharperPlugin.MyPlugin.ElementProblemAnalyzers;
 
@@ -22,64 +25,86 @@ public class CommitModificationAnalyzer : ElementProblemAnalyzer<IFile>
 
     protected override void Run(IFile file, ElementProblemAnalyzerData data, IHighlightingConsumer consumer)
     {
-        // Get the full file path for the current file
-        var filePath = file.GetSourceFile()?.GetLocation().FullPath;
+        var filePath = GetFilePath(file);
         if (string.IsNullOrEmpty(filePath)) return;
 
-        // Convert the file path to a repository-relative path using the GitRepositoryHandler
-        var relativeFilePath = _gitRepositoryHandler.GetRelativePath(filePath);
-
-        // Retrieve all modification ranges for this relative file path
-        var modificationRanges = _gitRepositoryHandler.GetModificationRanges(relativeFilePath);
-
+        var relativeFilePath =
+            FileOperationsHelper.GetRelativePath(filePath, _gitRepositoryHandler.GetRepositoryPath());
+        var modificationRanges = GetSortedModificationRanges(relativeFilePath);
         if (!modificationRanges.Any()) return;
 
-        // Sort modification ranges by starting line, then by start character position
-        modificationRanges = modificationRanges.OrderBy(range => range.StartLine)
-                                               .ThenBy(range => range.StartChar)
-                                               .ToList();
+        HighlightFirstModifiedLine(file, modificationRanges, consumer);
+    }
 
-        // Get the document's total length to ensure offsets stay in bounds
+    //TODO: reused part, extract into a separate class
+    private string GetFilePath(IFile file)
+    {
+        // Get the full file path for the current file
+        return file.GetSourceFile()?.GetLocation().FullPath;
+    }
+
+    private List<ModificationRange> GetSortedModificationRanges(string relativeFilePath)
+    {
+        // Retrieve and sort modification ranges by line and character position
+        var modificationRanges = _gitRepositoryHandler.GetModificationRanges(relativeFilePath);
+        return modificationRanges
+            .OrderBy(range => range.StartLine)
+            .ThenBy(range => range.StartChar)
+            .ToList();
+    }
+
+    private void HighlightFirstModifiedLine(IFile file, List<ModificationRange> modificationRanges,
+        IHighlightingConsumer consumer)
+    {
         var document = file.GetDocumentRange().Document;
         var documentLength = document.GetTextLength();
 
-        // Highlight only the first 5 non-whitespace characters in the first modified line
         foreach (var range in modificationRanges)
         {
-            // Calculate the document range for the modified text based on the modification range details
-            var lineStartOffset = document.GetLineStartOffset((Int32<DocLine>)(range.StartLine - 1)); 
-            var modificationStartOffset = lineStartOffset + range.StartChar;
-            var modificationEndOffset = Math.Min(modificationStartOffset + range.Length, documentLength);
-
-            // Extract the modified text from the document and identify first 5 non-whitespace characters
-            var modifiedText = document.GetText(new TextRange(modificationStartOffset, modificationEndOffset));
-
-            var highlightedCharCount = 0;
-            var startHighlightOffset = -1;
-            var endHighlightOffset = modificationStartOffset;
-
-            for (int i = 0; i < modifiedText.Length && highlightedCharCount < 5; i++)
+            var (startOffset, endOffset) = GetModificationOffsets(document, range, documentLength);
+            var modifiedText = document.GetText(new TextRange(startOffset, endOffset));
+            
+            var highlightRange = GetHighlightRange(document, modifiedText, startOffset);
+            if (highlightRange != null)
             {
-                // Skip whitespace and braces '{', '}', highlighting only meaningful code
-                if (!char.IsWhiteSpace(modifiedText[i]) && modifiedText[i] != '{' && modifiedText[i] != '}')
-                {
-                    if (highlightedCharCount == 0) startHighlightOffset = modificationStartOffset + i;
-                    highlightedCharCount++;
-                    endHighlightOffset = modificationStartOffset + i + 1;
-                }
-            }
-
-            // If at least one non-whitespace character is highlighted, create a highlight range
-            if (highlightedCharCount > 0 && startHighlightOffset != -1)
-            {
-                var highlightRange = new DocumentRange(document, new TextRange(startHighlightOffset, endHighlightOffset));
-
-                // Add highlighting for this modified range with the commit message
-                consumer.AddHighlighting(new CommitModificationInfo(highlightRange, range.CommitMessage));
+                consumer.AddHighlighting(new CommitModificationInfo(highlightRange.Value, range.CommitMessage));
             }
 
             // Stop after highlighting the first modified line
             break;
         }
+    }
+
+    private static (int startOffset, int endOffset) GetModificationOffsets(IDocument document, ModificationRange range,
+        int documentLength)
+    {
+        // Calculate the start and end offsets for the modified text range
+        var lineStartOffset = document.GetLineStartOffset((Int32<DocLine>)(range.StartLine - 1));
+        var startOffset = lineStartOffset + range.StartChar;
+        var endOffset = Math.Min(startOffset + range.Length, documentLength);
+        return (startOffset, endOffset);
+    }
+
+    private DocumentRange? GetHighlightRange(IDocument document, string modifiedText, int startOffset)
+    {
+        var highlightedCharCount = 0;
+        var startHighlightOffset = -1;
+        var endHighlightOffset = startOffset;
+
+        for (int i = 0; i < modifiedText.Length && highlightedCharCount < 5; i++)
+        {
+            if (!char.IsWhiteSpace(modifiedText[i]) && modifiedText[i] != '{' && modifiedText[i] != '}')
+            {
+                if (highlightedCharCount == 0) startHighlightOffset = startOffset + i;
+                highlightedCharCount++;
+                endHighlightOffset = startOffset + i + 1;
+            }
+        }
+
+        if (highlightedCharCount > 0 && startHighlightOffset != -1)
+        {
+            return new DocumentRange(document, new TextRange(startHighlightOffset, endHighlightOffset));
+        }
+        return null;
     }
 }

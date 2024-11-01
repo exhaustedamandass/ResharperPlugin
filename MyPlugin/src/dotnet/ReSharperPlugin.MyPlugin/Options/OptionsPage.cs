@@ -10,7 +10,7 @@ using JetBrains.ReSharper.Feature.Services.Resources;
 
 namespace ReSharperPlugin.MyPlugin.Options;
 
-[OptionsPage(Pid, "R# Git plugin", typeof(FeaturesEnvironmentOptionsThemedIcons.GeneratedCode), ParentId = ToolsPage.PID)]
+[OptionsPage(Pid, "R# Git plugin", typeof(FeaturesEnvironmentOptionsThemedIcons.Highlighting), ParentId = ToolsPage.PID)]
 public class OptionsPage : BeSimpleOptionsPage
 {
     private const string Pid = "ReSharperGitPluginOptions";
@@ -25,8 +25,6 @@ public class OptionsPage : BeSimpleOptionsPage
 
         AddIntOption((MySettingsKey key) => key.NCommits, "Number of commits");
     }
-    
-    
 }
 
 [JetBrains.Application.Settings.SettingsKey(typeof(EnvironmentSettings), "My settings")]

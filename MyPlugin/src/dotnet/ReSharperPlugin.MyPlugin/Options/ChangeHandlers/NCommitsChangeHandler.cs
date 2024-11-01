@@ -34,6 +34,6 @@ public class NCommitsChangeHandler
     {
         // Invalidate the entire solution to refresh highlighting
         _daemon.Invalidate("Invalidating the entire solution to refresh highlighting");
-        Console.WriteLine("Triggered rehighlighting for entire solution due to NCommits change.");
+        Console.WriteLine("Triggered re-highlighting for entire solution due to NCommits change.");
     }
 }
