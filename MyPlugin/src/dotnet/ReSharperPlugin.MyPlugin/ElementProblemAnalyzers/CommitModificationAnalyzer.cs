@@ -32,7 +32,7 @@ public class CommitModificationAnalyzer : ElementProblemAnalyzer<IFile>
         var modificationRanges = GetSortedModificationRanges(relativeFilePath);
         if (!modificationRanges.Any()) return;
 
-        HighlightFirstModifiedLine(file, modificationRanges, consumer);
+        HighlightFirstModifiedCharacters(file, modificationRanges, consumer);
     }
 
     private List<ModificationRange> GetSortedModificationRanges(string relativeFilePath)
@@ -45,27 +45,71 @@ public class CommitModificationAnalyzer : ElementProblemAnalyzer<IFile>
             .ToList();
     }
 
-    private void HighlightFirstModifiedLine(IFile file, List<ModificationRange> modificationRanges,
-        IHighlightingConsumer consumer)
+    private void HighlightFirstModifiedCharacters(IFile file, List<ModificationRange> modificationRanges,
+    IHighlightingConsumer consumer)
     {
         var document = file.GetDocumentRange().Document;
         var documentLength = document.GetTextLength();
+
+        var totalHighlightedChars = 0;
 
         foreach (var range in modificationRanges)
         {
             var (startOffset, endOffset) = GetModificationOffsets(document, range, documentLength);
             var modifiedText = document.GetText(new TextRange(startOffset, endOffset));
-            
-            var highlightRange = GetHighlightRange(document, modifiedText, startOffset);
-            if (highlightRange != null)
+
+            var highlightedCharsCount = 0;
+            var highlightStart = -1;
+
+            for (var i = 0; i < modifiedText.Length && totalHighlightedChars < 5; i++)
             {
-                consumer.AddHighlighting(new CommitModificationInfo(highlightRange.Value, range.CommitMessage));
+                if (!char.IsWhiteSpace(modifiedText[i]))
+                {
+                    if (highlightedCharsCount == 0) // Start of the highlight range
+                        highlightStart = startOffset + i;
+
+                    highlightedCharsCount++;
+                    totalHighlightedChars++;
+
+                    // Check if we've reached the limit of 5 highlighted characters
+                    if (totalHighlightedChars == 5)
+                    {
+                        var highlightEnd = startOffset + i + 1;
+                        consumer.AddHighlighting(new CommitModificationInfo(
+                            new DocumentRange(document, new TextRange(highlightStart, highlightEnd)),
+                            range.CommitMessage));
+                        return;  // Exit as we've highlighted 5 non-whitespace characters
+                    }
+                }
+                else if (highlightedCharsCount > 0) // Found whitespace within the target characters
+                {
+                    // Highlight up to the current position and reset counters
+                    var highlightEnd = startOffset + i;
+                    consumer.AddHighlighting(new CommitModificationInfo(
+                        new DocumentRange(document, new TextRange(highlightStart, highlightEnd)),
+                        range.CommitMessage));
+
+                    highlightedCharsCount = 0;
+                    highlightStart = -1;
+                }
             }
 
-            // Stop after highlighting the first modified line
-            break;
+            // Finalize any remaining highlight in the range if it ends without whitespace
+            if (highlightedCharsCount > 0 && totalHighlightedChars < 5)
+            {
+                var highlightEnd = startOffset + modifiedText.Length;
+                consumer.AddHighlighting(new CommitModificationInfo(
+                    new DocumentRange(document, new TextRange(highlightStart, highlightEnd)),
+                    range.CommitMessage));
+            }
+
+            // Stop if 5 characters have been highlighted
+            if (totalHighlightedChars >= 5)
+                break;
         }
     }
+
+
 
     private static (int startOffset, int endOffset) GetModificationOffsets(IDocument document, ModificationRange range,
         int documentLength)
