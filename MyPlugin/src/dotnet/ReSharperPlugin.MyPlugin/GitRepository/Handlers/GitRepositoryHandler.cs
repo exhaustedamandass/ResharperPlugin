@@ -78,31 +78,37 @@ public class GitRepositoryHandler
     {
         LoadRecentModifications(GetNCommits());
     }
-    
+
     private void LoadRecentModifications(int numberOfCommits)
     {
         _fileModificationRanges.Clear();
 
-        // Retrieve up to the specified number of commits + HEAD
         var commitHashes = GitOperationsHelper
             .ExecuteGitCommand($"log -n {numberOfCommits + 1} --pretty=format:%H", _repositoryPath).Split('\n');
 
-        // Process each commit except the last one, which acts as a baseline
         for (var i = 0; i < commitHashes.Length - 1; i++)
         {
             var currentCommit = commitHashes[i];
             var parentCommit = commitHashes[i + 1];
 
-            // Retrieve the diff output between the current commit and its parent
             var diffOutput = GitOperationsHelper
-                .ExecuteGitCommand($"diff {parentCommit} {currentCommit}", _repositoryPath);
+                .ExecuteGitCommand($"diff --word-diff {parentCommit} {currentCommit}", _repositoryPath);
 
-            // Retrieve the commit message for the current commit
             var commitMessage = GitOperationsHelper
                 .ExecuteGitCommand($"show -s --format=%B {currentCommit}", _repositoryPath);
 
-            // Parse the diff output with the specific commit message
-            _fileModificationRanges = DiffParser.ParseDiffOutput(diffOutput, commitMessage);
+            // Parse the diff output and get a temporary dictionary of modification ranges
+            var commitModificationRanges = DiffParser.ParseDiffOutput(diffOutput, commitMessage);
+
+            // Merge parsed modifications into the main _fileModificationRanges dictionary
+            foreach (var file in commitModificationRanges.Keys)
+            {
+                if (!_fileModificationRanges.ContainsKey(file))
+                {
+                    _fileModificationRanges[file] = [];
+                }
+                _fileModificationRanges[file].AddRange(commitModificationRanges[file]);
+            }
         }
     }
 }

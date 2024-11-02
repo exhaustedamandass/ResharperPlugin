@@ -19,7 +19,6 @@ public static class DiffParser
             if (IsFileDiffLine(line))
             {
                 currentFile = GetCurrentFileName(line);
-                currentNewLineNumber = 0;
                 insideModificationBlock = true;
 
                 if (!string.IsNullOrEmpty(currentFile) && !fileModificationRanges.ContainsKey(currentFile))
@@ -27,26 +26,17 @@ public static class DiffParser
                     fileModificationRanges[currentFile] = new List<ModificationRange>();
                 }
             }
-            else switch (insideModificationBlock)
+            else if (insideModificationBlock && IsLineNumberHeader(line))
             {
-                case true when IsLineNumberHeader(line):
-                    currentNewLineNumber = ParseNewLineNumber(line);
-                    break;
-                case true when IsModifiedLine(line):
-                    ProcessModifiedLine(line, currentFile, ref currentNewLineNumber, commitMessage, fileModificationRanges);
-                    break;
-                default:
+                currentNewLineNumber = ParseNewLineNumber(line); // Set the starting line for new additions
+            }
+            else if (insideModificationBlock)
+            {
+                if (IsModifiedLine(line))
                 {
-                    if (IsNonModifiedLine(line))
-                    {
-                        if (!IsDeletedLine(line))
-                        {
-                            currentNewLineNumber++;
-                        }
-                    }
-
-                    break;
+                    ProcessWordDiffLine(line, currentFile, currentNewLineNumber, commitMessage, fileModificationRanges);
                 }
+                currentNewLineNumber++; // Increment line number for each line in the diff, regardless of modification
             }
         }
 
@@ -65,47 +55,54 @@ public static class DiffParser
 
     private static int ParseNewLineNumber(string line)
     {
-        var match = Regex.Match(line, @"\+(\d+)");
+        // Matches lines in the format "@@ -a,b +c,d @@"
+        var match = Regex.Match(line, @"@@ -\d+,\d+ \+(\d+),");
         return match.Success ? int.Parse(match.Groups[1].Value) : 0;
     }
 
-    private static bool IsModifiedLine(string line) => line.StartsWith("+") && !line.StartsWith("+++");
+    private static bool IsModifiedLine(string line) => line.Contains("{+") || line.Contains("[-");
 
-    private static void ProcessModifiedLine(string line, string currentFile, ref int lineNumber, string commitMessage,
-                                     Dictionary<string, List<ModificationRange>> fileModificationRanges)
+    private static void ProcessWordDiffLine(string line, string currentFile, int lineNumber, string commitMessage,
+                                        Dictionary<string, List<ModificationRange>> fileModificationRanges)
     {
-        var lineContent = line[1..];
-        if (string.IsNullOrWhiteSpace(lineContent))
+        var addedContentPattern = new Regex(@"\{\+(.+?)\+\}");
+        var deletedContentPattern = new Regex(@"\[-(.+?)\-\]");
+
+        var cumulativeOffset = 0; // Tracks the cumulative effect of deleted characters and markers
+        var adjustedLine = line;  // A line where deletions are progressively removed for accurate indexing
+
+        // First, process all deletions to calculate the cumulative offset and adjust the line for accurate indexing
+        foreach (Match deleteMatch in deletedContentPattern.Matches(line))
         {
-            lineNumber++;
-            return;
+            var deletedText = deleteMatch.Value;
+            var startIdx = deleteMatch.Index - cumulativeOffset;
+
+            // Update cumulativeOffset by the length of the deleted content and its markers
+            cumulativeOffset += deletedText.Length;
+
+            // Remove the deleted text from `adjustedLine` to simulate the final appearance without deletions
+            adjustedLine = adjustedLine.Remove(startIdx, deletedText.Length);
         }
 
-        var highlightRange = GetHighlightRange(lineContent);
-        if (highlightRange != null && currentFile != null)
+        cumulativeOffset = 0; // Reset cumulativeOffset to re-calculate for additions based on the adjusted line
+
+        // Now process additions based on the adjusted line
+        foreach (Match addMatch in addedContentPattern.Matches(adjustedLine))
         {
-            fileModificationRanges[currentFile].Add(new ModificationRange(
-                lineNumber, highlightRange.Value.StartOffset, highlightRange.Value.Length, commitMessage));
+            var startChar = addMatch.Index - cumulativeOffset; // Calculate precise starting char in adjusted line
+            var addedText = addMatch.Groups[1].Value;
+            var length = addedText.Length;
+
+            // Add modification range with precise start and length
+            if (currentFile != null)
+            {
+                fileModificationRanges[currentFile].Add(new ModificationRange(
+                    lineNumber, startChar, length, commitMessage));
+            }
+
+            // Update cumulativeOffset by the markers `{+` and `+}` to adjust future matches correctly
+            cumulativeOffset += "{+".Length + "+}".Length;
         }
-
-        lineNumber++;
-    }
-
-    private static (int StartOffset, int Length)? GetHighlightRange(string lineContent)
-    {
-        var highlightedCharCount = 0;
-        var startHighlightOffset = -1;
-
-        for (var i = 0; i < lineContent.Length && highlightedCharCount < 5; i++)
-        {
-            if (char.IsWhiteSpace(lineContent[i])) continue;
-            if (highlightedCharCount == 0) startHighlightOffset = i;
-            highlightedCharCount++;
-        }
-
-        return highlightedCharCount > 0 && startHighlightOffset != -1 
-            ? (startHighlightOffset, highlightedCharCount) 
-            : null;
     }
 
     private static bool IsNonModifiedLine(string line) => line.StartsWith(" ") || line.StartsWith("-");

@@ -70,20 +70,33 @@ public class CommitModificationAnalyzer : ElementProblemAnalyzer<IFile>
     private static (int startOffset, int endOffset) GetModificationOffsets(IDocument document, ModificationRange range,
         int documentLength)
     {
-        // Calculate the start and end offsets for the modified text range
+        // Get the start and end offsets for the specified line in the document
         var lineStartOffset = document.GetLineStartOffset((Int32<DocLine>)(range.StartLine - 1));
-        var startOffset = lineStartOffset + range.StartChar;
-        var endOffset = Math.Min(startOffset + range.Length, documentLength);
+        var lineEndOffset = document.GetLineEndOffsetNoLineBreak((Int32<DocLine>)(range.StartLine - 1));
+
+        // Calculate startOffset within the bounds of the line
+        var startOffset = Math.Min(lineStartOffset + range.StartChar, lineEndOffset);
+
+        // Calculate endOffset as startOffset + length, but limit it to the lineEndOffset and document length
+        var endOffset = Math.Min(startOffset + range.Length, Math.Min(lineEndOffset, documentLength));
+
+        // Ensure startOffset does not exceed endOffset
+        if (startOffset > endOffset)
+        {
+            startOffset = endOffset;
+        }
+
         return (startOffset, endOffset);
     }
 
-    private DocumentRange? GetHighlightRange(IDocument document, string modifiedText, int startOffset)
+
+    private static DocumentRange? GetHighlightRange(IDocument document, string modifiedText, int startOffset)
     {
         var highlightedCharCount = 0;
         var startHighlightOffset = -1;
         var endHighlightOffset = startOffset;
 
-        for (int i = 0; i < modifiedText.Length && highlightedCharCount < 5; i++)
+        for (var i = 0; i < modifiedText.Length && highlightedCharCount < 5; i++)
         {
             if (!char.IsWhiteSpace(modifiedText[i]) && modifiedText[i] != '{' && modifiedText[i] != '}')
             {
