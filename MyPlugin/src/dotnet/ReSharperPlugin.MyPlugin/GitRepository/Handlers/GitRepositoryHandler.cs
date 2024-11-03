@@ -31,37 +31,34 @@ public class GitRepositoryHandler
         GitRepositoryMonitor gitRepositoryMonitor)
     {
         _fileModificationRanges = new Dictionary<string, List<ModificationRange>>();
-
+ 
         var solutionPath = solution.SolutionDirectory.FullPath;
-        
         if (string.IsNullOrEmpty(solutionPath))
         {
             return;
         }
-
-        NCommitsProperty = settingsStore.BindToContextLive(lifetime, ContextRange.ApplicationWide)
-            .GetValueProperty(lifetime, (MySettingsKey key) => key.NCommits);
-
-        // Listen to changes to keep track of any updates
-        NCommitsProperty.Change.Advise(lifetime, args =>
-        {
-            if (!args.HasNew) return;
-            OnRepositoryChanged();
-        });
-
+ 
         _repositoryPath = FileOperationsHelper.GetRepositoryRoot(solutionPath);
-
-        if (!string.IsNullOrEmpty(_repositoryPath))
+ 
+        if (string.IsNullOrEmpty(_repositoryPath))
         {
             return;
         }
-
+ 
+        NCommitsProperty = settingsStore.BindToContextLive(lifetime, ContextRange.ApplicationWide)
+            .GetValueProperty(lifetime, (MySettingsKey key) => key.NCommits);
+ 
+        // Listen to changes to keep track of any updates
+        NCommitsProperty.Change.Advise(lifetime, args =>
+        {
+            OnRepositoryChanged();
+        });
+ 
+     
         gitRepositoryMonitor.RepositoryChangedSignal.Advise(lifetime, _ =>
         {
             OnRepositoryChanged(); // React to the repository change signal
         });
-
-        
     }
     
     public List<ModificationRange> GetModificationRanges(string filePath)
