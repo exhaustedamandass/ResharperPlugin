@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Threading.Tasks;
 
 namespace ReSharperPlugin.MyPlugin.Helpers;
 
@@ -14,25 +15,28 @@ public static class GitOperationsHelper
     /// <param name="arguments">The Git command arguments (e.g., "status", "log").</param>
     /// <param name="repositoryPath">The path to the Git repository where the command should be executed.</param>
     /// <returns>The output from the Git command's standard output.</returns>
-    public static string ExecuteGitCommand(string arguments, string repositoryPath)
+    public static async Task<string> ExecuteGitCommandAsync(string arguments, string repositoryPath)
     {
-        var process = new Process
+        return await Task.Run(() =>
         {
-            StartInfo = new ProcessStartInfo
+            var process = new Process
             {
-                FileName = "git",
-                Arguments = arguments,
-                WorkingDirectory = repositoryPath,
-                RedirectStandardOutput = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            }
-        };
+                StartInfo = new ProcessStartInfo
+                {
+                    FileName = "git",
+                    Arguments = arguments,
+                    WorkingDirectory = repositoryPath,
+                    RedirectStandardOutput = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                }
+            };
 
-        process.Start();
-        var output = process.StandardOutput.ReadToEnd();
-        process.WaitForExit();
+            process.Start();
+            var output = process.StandardOutput.ReadToEnd();
+            process.WaitForExit();
 
-        return output;
+            return output;
+        });
     }
 }

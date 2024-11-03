@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using JetBrains.Application.Settings;
 using JetBrains.DataFlow;
 using JetBrains.Lifetimes;
@@ -23,7 +24,7 @@ public class GitRepositoryHandler
     private const string ShowCommitMessageFormat = "show -s --format=%B {0}";
 
     private readonly string _repositoryPath;
-    private Dictionary<string, List<ModificationRange>> _fileModificationRanges;
+    private readonly Dictionary<string, List<ModificationRange>> _fileModificationRanges;
     private IProperty<int> NCommitsProperty { get; }
     
     public GitRepositoryHandler(ISolution solution, Lifetime lifetime, ISettingsStore settingsStore,
@@ -83,30 +84,30 @@ public class GitRepositoryHandler
     
     private void OnRepositoryChanged()
     {
-        LoadRecentModifications(GetNCommits());
+        _ = LoadRecentModifications(GetNCommits());
     }
 
     /// <summary>
     /// Loads recent modifications for the specified number of commits, parsing each commit's changes.
     /// </summary>
     /// <param name="numberOfCommits">The number of recent commits to analyze.</param>
-    private void LoadRecentModifications(int numberOfCommits)
+    private async Task LoadRecentModifications(int numberOfCommits)
     {
         _fileModificationRanges.Clear();
 
-        var commitHashes = GitOperationsHelper
-            .ExecuteGitCommand(string.Format(LogCommandFormat, numberOfCommits + 1), _repositoryPath).Split('\n');
+        var commitHashes = (await GitOperationsHelper
+            .ExecuteGitCommandAsync(string.Format(LogCommandFormat, numberOfCommits + 1), _repositoryPath)).Split('\n');
 
         for (var i = 0; i < commitHashes.Length - 1; i++)
         {
             var currentCommit = commitHashes[i];
             var parentCommit = commitHashes[i + 1];
 
-            var diffOutput = GitOperationsHelper
-                .ExecuteGitCommand(string.Format(DiffCommandFormat, parentCommit, currentCommit), _repositoryPath);
+            var diffOutput = await GitOperationsHelper
+                .ExecuteGitCommandAsync(string.Format(DiffCommandFormat, parentCommit, currentCommit), _repositoryPath);
 
-            var commitMessage = GitOperationsHelper
-                .ExecuteGitCommand(string.Format(ShowCommitMessageFormat, currentCommit), _repositoryPath);
+            var commitMessage = await GitOperationsHelper
+                .ExecuteGitCommandAsync(string.Format(ShowCommitMessageFormat, currentCommit), _repositoryPath);
 
             // Parse the diff output and get a temporary dictionary of modification ranges
             var commitModificationRanges = DiffParser.ParseDiffOutput(diffOutput, commitMessage);

@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Threading.Tasks;
 using FluentAssertions;
 using NUnit.Framework;
 using ReSharperPlugin.MyPlugin.Helpers;
@@ -17,7 +18,7 @@ public class GitOperationsHelperTest
         // Create a temporary directory and initialize a new Git repository
         _tempRepoPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
         Directory.CreateDirectory(_tempRepoPath);
-        GitOperationsHelper.ExecuteGitCommand("init", _tempRepoPath);
+        _ = GitOperationsHelper.ExecuteGitCommandAsync("init", _tempRepoPath);
     }
 
     [TearDown]
@@ -31,26 +32,26 @@ public class GitOperationsHelperTest
     }
 
     [Test]
-    public void ExecuteGitCommand_WithValidCommand_ShouldReturnExpectedOutput()
+    public async Task ExecuteGitCommand_WithValidCommand_ShouldReturnExpectedOutput()
     {
         // Arrange
         const string arguments = "status";
 
         // Act
-        var result = GitOperationsHelper.ExecuteGitCommand(arguments, _tempRepoPath);
+        var result = await GitOperationsHelper.ExecuteGitCommandAsync(arguments, _tempRepoPath);
 
         // Assert
         result.Should().Contain("On branch master").And.Contain("No commits yet");
     }
 
     [Test]
-    public void ExecuteGitCommand_WithInvalidCommand_ShouldReturnErrorMessage()
+    public async Task ExecuteGitCommand_WithInvalidCommand_ShouldReturnErrorMessage()
     {
         // Arrange
         const string arguments = "invalidcommand";
 
         // Act
-        var result = GitOperationsHelper.ExecuteGitCommand(arguments, _tempRepoPath);
+        var result = await GitOperationsHelper.ExecuteGitCommandAsync(arguments, _tempRepoPath);
 
         // Assert
         // Check for either an error message or empty output to handle the absence of StandardError capture
