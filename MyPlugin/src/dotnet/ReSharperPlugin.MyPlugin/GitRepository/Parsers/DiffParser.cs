@@ -6,6 +6,14 @@ namespace ReSharperPlugin.MyPlugin.GitRepository.Parsers;
 
 public static class DiffParser
 {
+    private const string FileDiffPrefix = "diff --git";
+    private const string LineNumberHeaderPrefix = "@@";
+    private const string AddedContentPattern = @"\{\+(.+?)\+\}";
+    private const string DeletedContentPattern = @"\[-(.+?)\-\]";
+    private const string DiffFileNamePattern = @"diff --git a\/(.+?) b\/(.+)";
+    private const string LineNumberPattern = @"@@ -\d+,\d+ \+(\d+),";
+    private const int DefaultLineNumber = 0;
+
     public static Dictionary<string, List<ModificationRange>> ParseDiffOutput(string diffOutput, string commitMessage)
     {
         var fileModificationRanges = new Dictionary<string, List<ModificationRange>>();
@@ -23,7 +31,7 @@ public static class DiffParser
 
                 if (!string.IsNullOrEmpty(currentFile) && !fileModificationRanges.ContainsKey(currentFile))
                 {
-                    fileModificationRanges[currentFile] = new List<ModificationRange>();
+                    fileModificationRanges[currentFile] = [];
                 }
             }
             else if (insideModificationBlock && IsLineNumberHeader(line))
@@ -43,21 +51,21 @@ public static class DiffParser
         return fileModificationRanges;
     }
 
-    private static bool IsFileDiffLine(string line) => line.StartsWith("diff --git");
+    private static bool IsFileDiffLine(string line) => line.StartsWith(FileDiffPrefix);
 
     private static string GetCurrentFileName(string line)
     {
-        var match = Regex.Match(line, @"diff --git a\/(.+?) b\/(.+)");
+        var match = Regex.Match(line, DiffFileNamePattern);
         return match.Success ? match.Groups[2].Value : null;
     }
 
-    private static bool IsLineNumberHeader(string line) => line.StartsWith("@@");
+    private static bool IsLineNumberHeader(string line) => line.StartsWith(LineNumberHeaderPrefix);
 
     private static int ParseNewLineNumber(string line)
     {
         // Matches lines in the format "@@ -a,b +c,d @@"
-        var match = Regex.Match(line, @"@@ -\d+,\d+ \+(\d+),");
-        return match.Success ? int.Parse(match.Groups[1].Value) : 0;
+        var match = Regex.Match(line, LineNumberPattern);
+        return match.Success ? int.Parse(match.Groups[1].Value) : DefaultLineNumber;
     }
 
     private static bool IsModifiedLine(string line) => line.Contains("{+") || line.Contains("[-");
@@ -65,14 +73,14 @@ public static class DiffParser
     private static void ProcessWordDiffLine(string line, string currentFile, int lineNumber, string commitMessage,
                                         Dictionary<string, List<ModificationRange>> fileModificationRanges)
     {
-        var addedContentPattern = new Regex(@"\{\+(.+?)\+\}");
-        var deletedContentPattern = new Regex(@"\[-(.+?)\-\]");
+        var addedContentRegex = new Regex(AddedContentPattern);
+        var deletedContentRegex = new Regex(DeletedContentPattern);
 
         var cumulativeOffset = 0; // Tracks the cumulative effect of deleted characters and markers
         var adjustedLine = line;  // A line where deletions are progressively removed for accurate indexing
 
         // First, process all deletions to calculate the cumulative offset and adjust the line for accurate indexing
-        foreach (Match deleteMatch in deletedContentPattern.Matches(line))
+        foreach (Match deleteMatch in deletedContentRegex.Matches(line))
         {
             var deletedText = deleteMatch.Value;
             var startIdx = deleteMatch.Index - cumulativeOffset;
@@ -87,7 +95,7 @@ public static class DiffParser
         cumulativeOffset = 0; // Reset cumulativeOffset to re-calculate for additions based on the adjusted line
 
         // Now process additions based on the adjusted line
-        foreach (Match addMatch in addedContentPattern.Matches(adjustedLine))
+        foreach (Match addMatch in addedContentRegex.Matches(adjustedLine))
         {
             var startChar = addMatch.Index - cumulativeOffset; // Calculate precise starting char in adjusted line
             var addedText = addMatch.Groups[1].Value;
@@ -104,8 +112,4 @@ public static class DiffParser
             cumulativeOffset += "{+".Length + "+}".Length;
         }
     }
-
-    private static bool IsNonModifiedLine(string line) => line.StartsWith(" ") || line.StartsWith("-");
-
-    private static bool IsDeletedLine(string line) => line.StartsWith("-");
 }

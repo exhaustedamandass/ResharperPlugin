@@ -45,7 +45,7 @@ public class CommitModificationAnalyzer : ElementProblemAnalyzer<IFile>
             .ToList();
     }
 
-    private void HighlightFirstModifiedCharacters(IFile file, List<ModificationRange> modificationRanges,
+    private static void HighlightFirstModifiedCharacters(IFile file, List<ModificationRange> modificationRanges,
     IHighlightingConsumer consumer)
     {
         var document = file.GetDocumentRange().Document;
@@ -109,8 +109,6 @@ public class CommitModificationAnalyzer : ElementProblemAnalyzer<IFile>
         }
     }
 
-
-
     private static (int startOffset, int endOffset) GetModificationOffsets(IDocument document, ModificationRange range,
         int documentLength)
     {
@@ -125,35 +123,8 @@ public class CommitModificationAnalyzer : ElementProblemAnalyzer<IFile>
         var endOffset = Math.Min(startOffset + range.Length, Math.Min(lineEndOffset, documentLength));
 
         // Ensure startOffset does not exceed endOffset
-        if (startOffset > endOffset)
-        {
-            startOffset = endOffset;
-        }
+        startOffset = Math.Min(startOffset, endOffset);
 
         return (startOffset, endOffset);
-    }
-
-
-    private static DocumentRange? GetHighlightRange(IDocument document, string modifiedText, int startOffset)
-    {
-        var highlightedCharCount = 0;
-        var startHighlightOffset = -1;
-        var endHighlightOffset = startOffset;
-
-        for (var i = 0; i < modifiedText.Length && highlightedCharCount < 5; i++)
-        {
-            if (!char.IsWhiteSpace(modifiedText[i]) && modifiedText[i] != '{' && modifiedText[i] != '}')
-            {
-                if (highlightedCharCount == 0) startHighlightOffset = startOffset + i;
-                highlightedCharCount++;
-                endHighlightOffset = startOffset + i + 1;
-            }
-        }
-
-        if (highlightedCharCount > 0 && startHighlightOffset != -1)
-        {
-            return new DocumentRange(document, new TextRange(startHighlightOffset, endHighlightOffset));
-        }
-        return null;
     }
 }

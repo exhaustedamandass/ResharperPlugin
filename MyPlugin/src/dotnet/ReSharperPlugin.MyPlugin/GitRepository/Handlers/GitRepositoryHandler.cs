@@ -12,9 +12,16 @@ using ReSharperPlugin.MyPlugin.Options;
 
 namespace ReSharperPlugin.MyPlugin.GitRepository.Handlers;
 
+/// <summary>
+/// Manages Git repository data, monitors for changes, and retrieves recent code modifications.
+/// </summary>
 [SolutionComponent]
 public class GitRepositoryHandler
 {
+    private const string LogCommandFormat = "log -n {0} --pretty=format:%H";
+    private const string DiffCommandFormat = "diff --word-diff {0} {1}";
+    private const string ShowCommitMessageFormat = "show -s --format=%B {0}";
+
     private readonly string _repositoryPath;
     private Dictionary<string, List<ModificationRange>> _fileModificationRanges;
     private IProperty<int> NCommitsProperty { get; }
@@ -28,7 +35,6 @@ public class GitRepositoryHandler
         
         if (string.IsNullOrEmpty(solutionPath))
         {
-            Console.WriteLine("Solution path is null or empty, cannot initialize GitRepositoryHandler.");
             return;
         }
 
@@ -39,21 +45,22 @@ public class GitRepositoryHandler
         NCommitsProperty.Change.Advise(lifetime, args =>
         {
             if (!args.HasNew) return;
-            Console.WriteLine($"NCommits setting updated: {args.New}");
             OnRepositoryChanged();
         });
 
         _repositoryPath = FileOperationsHelper.GetRepositoryRoot(solutionPath);
+
+        if (!string.IsNullOrEmpty(_repositoryPath))
+        {
+            return;
+        }
 
         gitRepositoryMonitor.RepositoryChangedSignal.Advise(lifetime, _ =>
         {
             OnRepositoryChanged(); // React to the repository change signal
         });
 
-        if (!string.IsNullOrEmpty(_repositoryPath))
-        {
-            //do something in case solution is not in git repository 
-        }
+        
     }
     
     public List<ModificationRange> GetModificationRanges(string filePath)
@@ -79,12 +86,16 @@ public class GitRepositoryHandler
         LoadRecentModifications(GetNCommits());
     }
 
+    /// <summary>
+    /// Loads recent modifications for the specified number of commits, parsing each commit's changes.
+    /// </summary>
+    /// <param name="numberOfCommits">The number of recent commits to analyze.</param>
     private void LoadRecentModifications(int numberOfCommits)
     {
         _fileModificationRanges.Clear();
 
         var commitHashes = GitOperationsHelper
-            .ExecuteGitCommand($"log -n {numberOfCommits + 1} --pretty=format:%H", _repositoryPath).Split('\n');
+            .ExecuteGitCommand(string.Format(LogCommandFormat, numberOfCommits + 1), _repositoryPath).Split('\n');
 
         for (var i = 0; i < commitHashes.Length - 1; i++)
         {
@@ -92,10 +103,10 @@ public class GitRepositoryHandler
             var parentCommit = commitHashes[i + 1];
 
             var diffOutput = GitOperationsHelper
-                .ExecuteGitCommand($"diff --word-diff {parentCommit} {currentCommit}", _repositoryPath);
+                .ExecuteGitCommand(string.Format(DiffCommandFormat, parentCommit, currentCommit), _repositoryPath);
 
             var commitMessage = GitOperationsHelper
-                .ExecuteGitCommand($"show -s --format=%B {currentCommit}", _repositoryPath);
+                .ExecuteGitCommand(string.Format(ShowCommitMessageFormat, currentCommit), _repositoryPath);
 
             // Parse the diff output and get a temporary dictionary of modification ranges
             var commitModificationRanges = DiffParser.ParseDiffOutput(diffOutput, commitMessage);

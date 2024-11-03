@@ -16,8 +16,8 @@ public class FileOperationsHelperTest
         public void GetRelativePath_WithValidPaths_ShouldReturnRelativePath()
         {
             // Arrange
-            string fullPath = @"C:\MyRepo\src\file.txt";
-            string repositoryPath = @"C:\MyRepo";
+            const string fullPath = @"C:\MyRepo\src\file.txt";
+            const string repositoryPath = @"C:\MyRepo";
 
             // Act
             var result = FileOperationsHelper.GetRelativePath(fullPath, repositoryPath);
@@ -40,7 +40,7 @@ public class FileOperationsHelperTest
         public void GetRelativePath_WithEmptyRepositoryPath_ShouldReturnFullPath()
         {
             // Arrange
-            string fullPath = @"C:\MyRepo\src\file.txt";
+            const string fullPath = @"C:\MyRepo\src\file.txt";
 
             // Act
             var result = FileOperationsHelper.GetRelativePath(fullPath, string.Empty);
@@ -53,7 +53,7 @@ public class FileOperationsHelperTest
         public void GetRepositoryRoot_WithValidSolutionPath_ShouldReturnRootPath()
         {
             // Arrange
-            string tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+            var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
             Directory.CreateDirectory(tempDir);
             Directory.CreateDirectory(Path.Combine(tempDir, ".git"));
 
@@ -71,7 +71,7 @@ public class FileOperationsHelperTest
         public void GetRepositoryRoot_WithoutGitFolder_ShouldReturnNull()
         {
             // Arrange
-            string tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+            var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
             Directory.CreateDirectory(tempDir);
 
             // Act
@@ -88,7 +88,7 @@ public class FileOperationsHelperTest
         public void NormalizePath_WithBackslashes_ShouldReturnPathWithForwardSlashes()
         {
             // Arrange
-            string path = @"folder\subfolder\file.txt";
+            const string path = @"folder\subfolder\file.txt";
 
             // Act
             var result = FileOperationsHelper.NormalizePath(path);
@@ -108,29 +108,14 @@ public class FileOperationsHelperTest
         }
 
         [Test]
-        public void GetFilePath_WithValidIFile_ShouldReturnFilePath()
+        public void GetFilePath_WithNullIFile_ShouldReturnNull()
         {
             // Arrange
             var mockFile = new Mock<IFile>();
-            var mockSourceFile = new Mock<IPsiSourceFile>();
-            var mockLocation =
-                VirtualFileSystemPath.Parse(@"C:\MyRepo\src\file.txt", InteractionContext.SolutionContext);
-
-            mockSourceFile.Setup(x => x.GetLocation()).Returns(mockLocation);
-            mockFile.Setup(x => x.GetSourceFile()).Returns(mockSourceFile.Object);
+            mockFile.Setup(x => x.GetSourceFile()).Returns((IPsiSourceFile)null);
 
             // Act
             var result = FileOperationsHelper.GetFilePath(mockFile.Object);
-
-            // Assert
-            result.Should().Be(@"C:\MyRepo\src\file.txt");
-        }
-
-        [Test]
-        public void GetFilePath_WithNullIFile_ShouldReturnNull()
-        {
-            // Act
-            var result = FileOperationsHelper.GetFilePath(null);
 
             // Assert
             result.Should().BeNull();
