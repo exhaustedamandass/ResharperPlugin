@@ -46,7 +46,7 @@ Overview of functionality and usage
 ### Specify the Number of commits to highlight
 Go to Extensions -> Resharper -> Options
 
-![optionsNaviage](https://github.com/exhaustedamandass/ResharperPlugin/blob/main/MyPlugin/assets/NumberOfCommits.png)
+![optionsNaviage](https://github.com/exhaustedamandass/ResharperPlugin/blob/main/MyPlugin/assets/optionsNavigate.png)
 
 Scroll down to R# Git plugin
 
